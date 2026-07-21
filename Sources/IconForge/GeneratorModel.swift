@@ -1011,21 +1011,28 @@ final class GeneratorModel: ObservableObject {
         let appLabel = name.isEmpty ? "the app" : name
 
         let prompt = """
-        Set the icon below as the app icon for the macOS app we are working on in this session (\(appLabel)), then rebuild and reinstall it so the new icon shows up.
+        Set the icon below as the app icon for the app we are working on in this session (\(appLabel)), then rebuild and reinstall it so the new icon shows up.
 
         The icon is already generated. Use these files as they are, do not generate or redraw anything:
 
-          .icns (use this one):  \(artifacts.icns.path)
+          .icns (macOS):         \(artifacts.icns.path)
           .iconset folder:       \(artifacts.iconsetDir.path)
-          1024 PNG (masked):     \(artifacts.maskedPNG.path)
+          .ico (Windows):        \(artifacts.ico.path)
+          1024 PNG:              \(artifacts.maskedPNG.path)
           raw 1024 PNG:          \(artifacts.rawPNG.path)
           everything:            \(artifacts.sessionDir.path)
 
-        What to do:
-        1. Copy the .icns into the project where its icon lives. For a hand-built Swift Package app that is usually Resources/AppIcon.icns; for an Xcode project, import the .iconset contents into the AppIcon asset instead.
-        2. Make sure the bundle's Info.plist has CFBundleIconFile set to the icon's base name (AppIcon) and that the build step copies the .icns into Contents/Resources.
-        3. Rebuild the .app, re-sign it (codesign --force --sign - path/to/App.app), and reinstall it, replacing any copy already in /Applications.
-        4. If the Dock or Finder still shows the old icon, touch the bundle and restart the Dock to drop the cached version.
+        Work out how this project declares its icon before changing anything, because it varies by stack. Look for an existing icon file or icon config and replace it in place rather than inventing a new convention. Common cases:
+
+        - Hand-built Swift Package .app: copy the .icns to Resources/AppIcon.icns, set CFBundleIconFile in Info.plist, make sure the build step copies it into Contents/Resources.
+        - Xcode project: import the .iconset contents into the AppIcon asset in the asset catalog.
+        - Tauri: replace the files in src-tauri/icons (icon.icns, icon.ico and the PNG sizes), or run `tauri icon` against the 1024 PNG to regenerate the set. Check tauri.conf.json points at them.
+        - Electron: electron-builder reads build/icon.icns and build/icon.ico; Forge takes packagerConfig.icon without an extension. Replace whichever this project uses.
+        - Flutter: macos/Runner/Assets.xcassets/AppIcon.appiconset, and the equivalent per platform.
+        - Web app or PWA: use the PNG sizes from the .iconset and update the manifest.
+        - Anything else: find where the current icon lives, match its format and naming, and swap it.
+
+        Then rebuild the app. If it is signed ad-hoc or unsigned, re-sign after modifying the bundle (codesign --force --sign - path/to/App.app). Reinstall it, replacing any copy already installed. If the Dock or Finder still shows the old icon, touch the bundle and restart the Dock to drop the cached version.
 
         Tell me which files you changed and confirm the installed app is using the new icon.
         """
