@@ -54,7 +54,7 @@ enum IconBodySize: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .appleStandard: return "824 of 1024, Apple's template margin"
         case .large: return "928 of 1024, fills more of the tile"
-        case .fullBleed: return "Edge to edge, no room for a shadow"
+        case .fullBleed: return "Plain square, no mask — macOS 26 applies its own"
         }
     }
 }
@@ -116,10 +116,16 @@ enum IconPipeline {
     static func process(rawImage rawURL: URL,
                         into sessionDir: URL,
                         finish: IconFinish = .appleEdge,
-                        bodySize: IconBodySize = .large) throws -> Artifacts {
+                        bodySize: IconBodySize = .fullBleed) throws -> Artifacts {
         var source = try normalize(try loadImage(at: rawURL))
         if finish == .punchy { source = try enrich(source) }
-        let body = try applyFinish(finish, to: try maskBody(from: source, edge: bodySize.pixels))
+
+        // Full bleed ships the square untouched: macOS 26 wraps a legacy .icns
+        // in its own rounded plate, so any mask or margin of ours would sit
+        // inside that plate and read as a border.
+        let body = bodySize == .fullBleed
+            ? try applyFinish(finish, to: source, rounded: false)
+            : try applyFinish(finish, to: try maskBody(from: source, edge: bodySize.pixels))
         let masked = try composite(body: body, finish: finish)
 
         let maskedURL = sessionDir.appendingPathComponent("icon_1024.png")
@@ -242,7 +248,7 @@ enum IconPipeline {
     /// The edge treatment that separates a system icon from a flat picture in a
     /// rounded box: a lit top lip, a shaded base, and a hairline inside the
     /// silhouette. All of it is clipped to the squircle, so nothing spills.
-    static func applyFinish(_ finish: IconFinish, to body: CGImage) throws -> CGImage {
+    static func applyFinish(_ finish: IconFinish, to body: CGImage, rounded: Bool = true) throws -> CGImage {
         guard finish != .flat else { return body }
 
         let size = CGFloat(body.width)
@@ -250,7 +256,8 @@ enum IconPipeline {
         let rect = CGRect(x: 0, y: 0, width: size, height: size)
         ctx.draw(body, in: rect)
 
-        let path = squirclePath(in: rect)
+        // A square clip when the system will be doing the rounding itself.
+        let path = rounded ? squirclePath(in: rect) : CGPath(rect: rect, transform: nil)
         ctx.saveGState()
         ctx.addPath(path)
         ctx.clip()
@@ -300,10 +307,13 @@ enum IconPipeline {
 
         // Hairline just inside the silhouette. The stroke straddles the path and
         // the clip removes its outer half, which is exactly the inner edge.
-        ctx.addPath(path)
-        ctx.setStrokeColor(CGColor(red: 1, green: 1, blue: 1, alpha: 0.30))
-        ctx.setLineWidth(size * 0.006)
-        ctx.strokePath()
+        // Pointless on a square the system is about to round away.
+        if rounded {
+            ctx.addPath(path)
+            ctx.setStrokeColor(CGColor(red: 1, green: 1, blue: 1, alpha: 0.30))
+            ctx.setLineWidth(size * 0.006)
+            ctx.strokePath()
+        }
 
         ctx.restoreGState()
 

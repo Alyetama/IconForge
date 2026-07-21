@@ -139,7 +139,7 @@ final class GeneratorModel: ObservableObject {
     }
 
     /// How much of the canvas the icon body fills. Same deal: a local re-render.
-    @Published var bodySize: IconBodySize = IconBodySize(rawValue: UserDefaults.standard.string(forKey: "bodySize") ?? "") ?? .large {
+    @Published var bodySize: IconBodySize = IconBodySize(rawValue: UserDefaults.standard.string(forKey: "bodySize") ?? "") ?? .fullBleed {
         didSet {
             guard bodySize != oldValue else { return }
             UserDefaults.standard.set(bodySize.rawValue, forKey: "bodySize")
