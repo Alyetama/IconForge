@@ -191,7 +191,9 @@ enum AgyRunner {
         process.arguments = ["-lc", "command -v \(name)"]
         let pipe = Pipe()
         process.standardOutput = pipe
-        process.standardError = Pipe()
+        // Discarded rather than piped: an undrained pipe is a deadlock waiting
+        // for a login shell whose rc files are chatty enough to fill it.
+        process.standardError = FileHandle.nullDevice
 
         do {
             try process.run()
@@ -208,6 +210,9 @@ enum AgyRunner {
     /// Model families left out of the picker.
     static let excludedModelPrefixes = ["claude"]
 
+    /// How long `agy models` may take before it is treated as wedged.
+    static let modelListTimeout = 30
+
     /// Asks agy which models it can drive (`agy models`). Anything that isn't a
     /// bare identifier is dropped, so a stray banner line can't become a
     /// "model" in the picker.
@@ -221,21 +226,52 @@ enum AgyRunner {
         process.environment = env
 
         let outPipe = Pipe()
+        let errPipe = Pipe()
         process.standardOutput = outPipe
-        process.standardError = Pipe()
+        process.standardError = errPipe
         process.standardInput = FileHandle.nullDevice
+
+        // Both pipes get drained, and on their own queues. Reading stdout to the
+        // end while stderr fills its 64K buffer deadlocks the pair: the child
+        // blocks on the write, we block on the read. A CLI only has to print a
+        // long enough warning banner to wedge the picker for good.
+        let collector = OutputCollector()
+        let errors = OutputCollector()
+        let group = DispatchGroup()
+        for (pipe, sink) in [(outPipe, collector), (errPipe, errors)] {
+            DispatchQueue.global(qos: .userInitiated).async(group: group) {
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                sink.append(String(data: data, encoding: .utf8) ?? "")
+            }
+        }
 
         do {
             try process.run()
         } catch {
             throw AgyError.launchFailed(tool: binary.lastPathComponent, error.localizedDescription)
         }
-        let data = outPipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
 
-        let text = String(data: data, encoding: .utf8) ?? ""
+        // And a deadline, so a CLI that never exits can't leave the picker
+        // loading forever with no way back.
+        let timeoutFlag = TimeoutFlag()
+        let deadline = DispatchWorkItem {
+            timeoutFlag.trip()
+            process.terminate()
+        }
+        DispatchQueue.global().asyncAfter(deadline: .now() + .seconds(modelListTimeout), execute: deadline)
+
+        process.waitUntilExit()
+        deadline.cancel()
+        group.wait()
+
+        let text = collector.text
+        if timeoutFlag.tripped {
+            throw AgyError.timedOut(tool: binary.lastPathComponent, seconds: modelListTimeout)
+        }
         guard process.terminationStatus == 0 else {
-            throw AgyError.failed(tool: binary.lastPathComponent, status: process.terminationStatus, output: text)
+            throw AgyError.failed(tool: binary.lastPathComponent,
+                                  status: process.terminationStatus,
+                                  output: text.isEmpty ? errors.text : text)
         }
 
         let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-_")

@@ -425,7 +425,9 @@ enum IconPipeline {
 
         let errPipe = Pipe()
         process.standardError = errPipe
-        process.standardOutput = Pipe()
+        // Discarded, not piped: nothing reads iconutil's stdout, and an
+        // undrained pipe would deadlock if it ever filled.
+        process.standardOutput = FileHandle.nullDevice
 
         try process.run()
         let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
