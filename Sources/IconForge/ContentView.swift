@@ -89,23 +89,39 @@ private struct InspectorPane: View {
                     .labelsHidden()
                 }
 
+                FieldGroup(title: "Generator", symbol: "terminal", hint: model.backend.blurb) {
+                    Picker("", selection: Binding(get: { model.backend },
+                                                  set: { model.backend = $0 })) {
+                        ForEach(GeneratorBackend.allCases) { option in
+                            Text(option.rawValue).tag(option)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                }
+
                 FieldGroup(title: "Model", symbol: "cpu",
                            hint: model.isLoadingModels ? "reading agy models…" : nil) {
                     HStack(spacing: 8) {
-                        Picker("", selection: $model.model) {
-                            ForEach(model.modelChoices, id: \.self) { name in
-                                Text(name).tag(name)
+                        if model.backend.canListModels {
+                            Picker("", selection: $model.model) {
+                                ForEach(model.modelChoices, id: \.self) { name in
+                                    Text(name).tag(name)
+                                }
                             }
-                        }
-                        .labelsHidden()
+                            .labelsHidden()
 
-                        Button {
-                            model.loadModels()
-                        } label: {
-                            Image(systemName: "arrow.clockwise")
+                            Button {
+                                model.loadModels()
+                            } label: {
+                                Image(systemName: "arrow.clockwise")
+                            }
+                            .disabled(model.isLoadingModels)
+                            .help("Re-read the list from `agy models`")
+                        } else {
+                            TextField(model.backend.defaultModel, text: $model.model)
+                                .textFieldStyle(.roundedBorder)
                         }
-                        .disabled(model.isLoadingModels)
-                        .help("Re-read the list from `agy models`")
                     }
                 }
 

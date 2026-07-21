@@ -103,6 +103,9 @@ final class GeneratorModel: ObservableObject {
     @AppStorage("outputDirectory") var outputDirectoryPath = Defaults.outputDirectory.path
     @AppStorage("model") var model = Defaults.model
     @AppStorage("agyPath") var agyPath = ""
+    /// Which CLI draws the artwork. Stored as a raw value so @AppStorage can
+    /// hold it; the picker binds through `backend`.
+    @AppStorage("backend") private var backendRaw = GeneratorBackend.agy.rawValue
     @AppStorage("variantCount") var variantCount = 1
 
     /// The subject IconForge derived last time. If the field still holds this,
@@ -193,6 +196,19 @@ final class GeneratorModel: ObservableObject {
             && !phase.isBusy
     }
 
+    var backend: GeneratorBackend {
+        get { GeneratorBackend(rawValue: backendRaw) ?? .agy }
+        set {
+            guard newValue != backend else { return }
+            backendRaw = newValue.rawValue
+            // Model names do not carry across CLIs.
+            model = newValue.defaultModel
+            availableModels = []
+            modelListError = nil
+            if newValue.canListModels { loadModels() }
+        }
+    }
+
     var outputDirectory: URL {
         URL(fileURLWithPath: (outputDirectoryPath as NSString).expandingTildeInPath, isDirectory: true)
     }
@@ -203,14 +219,14 @@ final class GeneratorModel: ObservableObject {
         var choices = availableModels
         let excluded = AgyRunner.excludedModelPrefixes.contains { model.lowercased().hasPrefix($0) }
         if !model.isEmpty && !excluded && !choices.contains(model) { choices.insert(model, at: 0) }
-        if choices.isEmpty { choices = [Defaults.model] }
+        if choices.isEmpty { choices = [backend.defaultModel] }
         return choices
     }
 
     // MARK: - Model discovery
 
     func loadModels() {
-        guard !isLoadingModels else { return }
+        guard !isLoadingModels, backend.canListModels else { return }
 
         // A model saved before it was excluded would leave the picker with a
         // selection it can't show, so drop it back to the default first.
@@ -254,6 +270,7 @@ final class GeneratorModel: ObservableObject {
         let modelName = model
         let baseDir = outputDirectory
         let agyOverride = agyPath
+        let chosenBackend = backend
         let count = max(1, min(Defaults.maxVariants, variantCount))
 
         // If the field has something in it, it is the user's and it wins. The
@@ -277,7 +294,8 @@ final class GeneratorModel: ObservableObject {
 
         Task {
             do {
-                let binary = try AgyRunner.resolveBinary(customPath: agyOverride)
+                let binary = try AgyRunner.resolveBinary(customPath: agyOverride,
+                                                         named: chosenBackend.binaryName)
                 let stamp = Self.timestamp()
 
                 // 1. Subjects: the typed one for every variant, or a fresh set.
@@ -289,6 +307,7 @@ final class GeneratorModel: ObservableObject {
                                                      model: modelName,
                                                      subject: typedSubject,
                                                      workingDirectory: baseDir,
+                                                     backend: chosenBackend,
                                                      handle: runHandles[0])
                     subjects = Array(repeating: PromptBuilder.SubjectIdea(subject: typedSubject, form: form),
                                      count: count)
@@ -303,6 +322,7 @@ final class GeneratorModel: ObservableObject {
                                                          count: count,
                                                          avoiding: avoid,
                                                          workingDirectory: baseDir,
+                                                         backend: chosenBackend,
                                                          handle: runHandles[0])
                     derivedSubject = subjects[0].subject
                 }
@@ -325,6 +345,7 @@ final class GeneratorModel: ObservableObject {
                                            style: styleVariant,
                                            baseDir: baseDir,
                                            stamp: stamp,
+                                           backend: chosenBackend,
                                            isBatch: count > 1,
                                            finish: finish,
                                            bodySize: bodySize)
@@ -455,6 +476,7 @@ final class GeneratorModel: ObservableObject {
         let agyOverride = agyPath
         let chosenFinish = finish
         let chosenBodySize = bodySize
+        let chosenBackend = backend
         let styleVariant = style
         let paletteHint = palette.trimmingCharacters(in: .whitespacesAndNewlines)
         let runHandle = AgyProcessHandle()
@@ -466,7 +488,8 @@ final class GeneratorModel: ObservableObject {
 
         Task {
             do {
-                let binary = try AgyRunner.resolveBinary(customPath: agyOverride)
+                let binary = try AgyRunner.resolveBinary(customPath: agyOverride,
+                                                         named: chosenBackend.binaryName)
                 let sessionDir = try Self.makeSessionDirectory(base: baseDir,
                                                                appName: name.isEmpty ? "icon" : name,
                                                                stamp: Self.timestamp(),
@@ -484,6 +507,7 @@ final class GeneratorModel: ObservableObject {
                 let started = Date()
                 let output = try await Task.detached(priority: .userInitiated) {
                     try AgyRunner.run(binary: binary,
+                                      backend: chosenBackend,
                                       model: modelName,
                                       prompt: instruction,
                                       workingDirectory: sessionDir,
@@ -583,6 +607,7 @@ final class GeneratorModel: ObservableObject {
         let style: StyleVariant
         let baseDir: URL
         let stamp: String
+        let backend: GeneratorBackend
         let isBatch: Bool
         let finish: IconFinish
         let bodySize: IconBodySize
@@ -742,6 +767,7 @@ final class GeneratorModel: ObservableObject {
                                        count: Int,
                                        avoiding used: [String],
                                        workingDirectory: URL,
+                                       backend: GeneratorBackend,
                                        handle: AgyProcessHandle) async -> [PromptBuilder.SubjectIdea] {
         try? FileManager.default.createDirectory(at: workingDirectory, withIntermediateDirectories: true)
 
@@ -751,6 +777,7 @@ final class GeneratorModel: ObservableObject {
                                                   avoiding: used)
         let raw = try? await Task.detached(priority: .userInitiated) {
             try AgyRunner.run(binary: binary,
+                              backend: backend,
                               model: model,
                               prompt: prompt,
                               workingDirectory: workingDirectory,
@@ -773,10 +800,12 @@ final class GeneratorModel: ObservableObject {
                                    model: String,
                                    subject: String,
                                    workingDirectory: URL,
+                                   backend: GeneratorBackend,
                                    handle: AgyProcessHandle) async -> String? {
         try? FileManager.default.createDirectory(at: workingDirectory, withIntermediateDirectories: true)
         let raw = try? await Task.detached(priority: .userInitiated) {
             try AgyRunner.run(binary: binary,
+                              backend: backend,
                               model: model,
                               prompt: PromptBuilder.formPrompt(subject: subject),
                               workingDirectory: workingDirectory,

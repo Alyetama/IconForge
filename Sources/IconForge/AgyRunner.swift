@@ -1,5 +1,46 @@
 import Foundation
 
+/// Which command line agent draws the artwork. Both take a prompt and leave a
+/// PNG where the prompt tells them to; only the flags differ.
+enum GeneratorBackend: String, CaseIterable, Identifiable, Codable {
+    case agy = "agy"
+    case codex = "codex"
+
+    var id: String { rawValue }
+    var binaryName: String { rawValue }
+
+    var defaultModel: String {
+        switch self {
+        case .agy: return "gemini-3.1-pro-high"
+        case .codex: return "gpt-5.6-luna"
+        }
+    }
+
+    /// codex refuses to run outside a git repo without being told not to care,
+    /// and takes its reasoning effort through a config override.
+    func arguments(model: String, prompt: String) -> [String] {
+        switch self {
+        case .agy:
+            return ["--model", model, "-p", prompt]
+        case .codex:
+            return ["exec", prompt,
+                    "--model", model,
+                    "-c", "model_reasoning_effort=\"low\"",
+                    "--skip-git-repo-check"]
+        }
+    }
+
+    /// Only agy can list its own models.
+    var canListModels: Bool { self == .agy }
+
+    var blurb: String {
+        switch self {
+        case .agy: return "gemini models, lists its own"
+        case .codex: return "gpt models, type the name yourself"
+        }
+    }
+}
+
 enum AgyError: LocalizedError {
     case notFound(searched: [String])
     case launchFailed(String)
@@ -101,7 +142,7 @@ enum AgyRunner {
 
     /// Resolve the agy binary: explicit override first, then the search
     /// directories, then whatever the login shell would use.
-    static func resolveBinary(customPath: String) throws -> URL {
+    static func resolveBinary(customPath: String, named name: String = "agy") throws -> URL {
         let fm = FileManager.default
         let trimmed = customPath.trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -115,25 +156,25 @@ enum AgyRunner {
 
         var seen: [String] = []
         for dir in searchDirectories {
-            let candidate = (dir as NSString).appendingPathComponent("agy")
+            let candidate = (dir as NSString).appendingPathComponent(name)
             if !seen.contains(dir) { seen.append(dir) }
             if fm.isExecutableFile(atPath: candidate) {
                 return URL(fileURLWithPath: candidate)
             }
         }
 
-        if let fromShell = lookupViaLoginShell(), fm.isExecutableFile(atPath: fromShell) {
+        if let fromShell = lookupViaLoginShell(name), fm.isExecutableFile(atPath: fromShell) {
             return URL(fileURLWithPath: fromShell)
         }
 
         throw AgyError.notFound(searched: seen)
     }
 
-    private static func lookupViaLoginShell() -> String? {
+    private static func lookupViaLoginShell(_ name: String) -> String? {
         let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
         let process = Process()
         process.executableURL = URL(fileURLWithPath: shell)
-        process.arguments = ["-lc", "command -v agy"]
+        process.arguments = ["-lc", "command -v \(name)"]
         let pipe = Pipe()
         process.standardOutput = pipe
         process.standardError = Pipe()
@@ -200,6 +241,7 @@ enum AgyRunner {
     /// Runs `agy --model <model> -p <prompt>` and returns everything it printed.
     /// Blocking — call it off the main thread.
     static func run(binary: URL,
+                    backend: GeneratorBackend = .agy,
                     model: String,
                     prompt: String,
                     workingDirectory: URL,
@@ -207,7 +249,7 @@ enum AgyRunner {
                     handle: AgyProcessHandle) throws -> String {
         let process = Process()
         process.executableURL = binary
-        process.arguments = ["--model", model, "-p", prompt]
+        process.arguments = backend.arguments(model: model, prompt: prompt)
         process.currentDirectoryURL = workingDirectory
 
         // Give the child a PATH that includes wherever agy itself lives, so any
