@@ -217,7 +217,7 @@
 
   .btn.primary:hover { background: var(--beak-2); }
 
-  /* mockup floats on the page, no frame — the svg has its own chrome */
+  /* the screenshot floats on the page; it brings its own window chrome */
 
   .shot {
     position: relative;
@@ -236,14 +236,13 @@
     pointer-events: none;
   }
 
+  /* The screenshot is a window capture: it carries macOS's own shadow inside a
+     transparent margin, so a border-radius and box-shadow here would draw a
+     rectangle around that empty margin instead of around the window. */
   .shot img {
     position: relative;
     display: block;
     width: 100%;
-    border-radius: 16px;
-    box-shadow:
-      0 50px 100px rgba(0, 0, 0, 0.6),
-      0 12px 32px rgba(0, 0, 0, 0.45);
     transform: rotateX(var(--tilt, 7deg));
     transform-origin: center 120%;
     will-change: transform;
@@ -732,7 +731,7 @@
       <a class="btn" href="https://github.com/Alyetama/IconForge">View on GitHub</a>
     </div>
     <figure class="shot" id="shot">
-      <img src="mockup.svg" alt="The IconForge window showing an icon preview on light and dark backgrounds">
+      <img src="screenshot.png" alt="The IconForge window: inputs on the left, the finished icon previewed on light and dark desktops, past runs along the bottom">
     </figure>
   </div>
 </header>
@@ -943,7 +942,7 @@
 </dialog>
 
 <script>
-  // mockup tilt: settles flat as it scrolls into view
+  // screenshot tilt: settles flat as it scrolls into view
   const shot = document.getElementById('shot');
   const shotImg = shot.querySelector('img');
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;

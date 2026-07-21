@@ -6,7 +6,7 @@ You type a name and what the app does. IconForge works out what object to draw, 
 
 Generate up to four at once and keep the one you like. If one is nearly right, say what to change in plain words and IconForge edits that icon instead of starting over.
 
-<img src="docs/mockup.svg" alt="IconForge window showing an icon preview on light and dark backgrounds" width="100%">
+<img src="docs/screenshot.png" alt="The IconForge window: inputs on the left, the finished icon previewed on light and dark desktops, past runs along the bottom" width="100%">
 
 <p>
   <img src="docs/examples/dupefind.png" width="104" alt="DupeFind: a snake on a green gradient">
