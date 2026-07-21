@@ -105,6 +105,17 @@ private struct InspectorPane: View {
                     }
                 }
 
+                FieldGroup(title: "Icons per run", symbol: "square.grid.2x2",
+                           hint: model.variantCount > 1 ? "pick one afterwards" : nil) {
+                    Picker("", selection: $model.variantCount) {
+                        ForEach(1...Defaults.maxVariants, id: \.self) { count in
+                            Text("\(count)").tag(count)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                }
+
                 actionButtons
                 statusBlock
 
@@ -286,7 +297,8 @@ private struct PaletteField: View {
                     if let selected {
                         PaletteSwatch(palette: selected, height: 16)
                             .frame(width: 76)
-                        Text("Palette \(selected.rank)")
+                        Text(selected.displayName)
+                            .lineLimit(1)
                     } else {
                         Image(systemName: "swatchpalette")
                             .foregroundStyle(.secondary)
@@ -343,22 +355,10 @@ private struct PaletteLibraryView: View {
 
             ScrollView {
                 LazyVGrid(columns: columns, spacing: 8) {
-                    ForEach(PaletteLibrary.popular) { palette in
-                        Button {
-                            choose(palette)
-                        } label: {
-                            PaletteSwatch(palette: palette, height: 26, cornerRadius: 6)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                        .strokeBorder(Color.accentColor,
-                                                      lineWidth: palette == selected ? 2.5 : 0)
-                                )
-                                // The label is clipped to the pill, which leaves
-                                // the button with no hit region of its own.
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .help("Palette \(palette.rank): " + palette.hexes.map { "#\($0)" }.joined(separator: "  "))
+                    ForEach(PaletteLibrary.trending) { palette in
+                        PaletteTile(palette: palette,
+                                    isSelected: palette == selected,
+                                    choose: choose)
                     }
                 }
                 .padding(.bottom, 4)
@@ -372,6 +372,33 @@ private struct PaletteLibraryView: View {
         .padding(10)
         .background(RoundedRectangle(cornerRadius: 8).fill(Color(nsColor: .underPageBackgroundColor)))
         .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color(nsColor: .separatorColor)))
+    }
+}
+
+private struct PaletteTile: View {
+    let palette: ColorPalette
+    let isSelected: Bool
+    let choose: (ColorPalette?) -> Void
+
+    private var tooltip: String {
+        palette.displayName + "  " + palette.hexes.map { "#\($0)" }.joined(separator: "  ")
+    }
+
+    var body: some View {
+        Button {
+            choose(palette)
+        } label: {
+            PaletteSwatch(palette: palette, height: 26, cornerRadius: 6)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .strokeBorder(Color.accentColor, lineWidth: isSelected ? 2.5 : 0)
+                )
+                // The label is clipped to the pill, which leaves the button
+                // with no hit region of its own.
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(tooltip)
     }
 }
 
@@ -418,6 +445,11 @@ private struct PreviewPane: View {
                         PreviewCard(isLight: false)
                     }
                     smallSizes
+
+                    if model.variants.count > 1 {
+                        VariantPicker()
+                    }
+
                     if let artifacts = model.artifacts {
                         VStack(spacing: 12) {
                             FileChips(artifacts: artifacts)
@@ -522,6 +554,65 @@ private struct IconThumb: View {
                     }
                 }
         }
+    }
+}
+
+/// The batch from the last press of Generate. Clicking one promotes it to the
+/// main preview and to every action that follows.
+private struct VariantPicker: View {
+    @EnvironmentObject private var model: GeneratorModel
+
+    var body: some View {
+        VStack(spacing: 6) {
+            Text("Pick one")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 12) {
+                ForEach(model.variants) { variant in
+                    VariantTile(variant: variant,
+                                isSelected: variant.id == model.selectedVariantID) {
+                        model.select(variant)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct VariantTile: View {
+    let variant: IconVariant
+    let isSelected: Bool
+    let select: () -> Void
+
+    var body: some View {
+        Button(action: select) {
+            VStack(spacing: 5) {
+                if let image = variant.image {
+                    Image(nsImage: image)
+                        .resizable()
+                        .interpolation(.high)
+                        .frame(width: 64, height: 64)
+                }
+                Text(variant.subject)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .frame(width: 92)
+            }
+            .padding(7)
+            .background(
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(isSelected ? Color.accentColor.opacity(0.18) : Color.clear)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .strokeBorder(Color.accentColor, lineWidth: isSelected ? 1.5 : 0)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(variant.subject)
     }
 }
 

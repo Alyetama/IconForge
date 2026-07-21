@@ -9,6 +9,12 @@ enum Defaults {
     static let timeoutSeconds = 420
     /// Newest N runs shown in the gallery strip.
     static let historyLimit = 60
+    /// Most icons one press of Generate can produce.
+    static let maxVariants = 4
+    /// Tries per icon before giving up on it.
+    static let attemptsPerIcon = 2
+    /// How many past subjects to steer away from on the next roll.
+    static let rememberedSubjects = 12
 
     static var outputDirectory: URL {
         FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(outputFolderName, isDirectory: true)
@@ -24,6 +30,14 @@ struct RunMetadata: Codable {
     var style: StyleVariant
     var model: String
     var createdAt: Date
+}
+
+/// One finished icon from the current batch.
+struct IconVariant: Identifiable {
+    let id = UUID()
+    let subject: String
+    let artifacts: IconPipeline.Artifacts
+    let image: NSImage?
 }
 
 /// One past generation, as read back off disk.
@@ -85,6 +99,15 @@ final class GeneratorModel: ObservableObject {
     @AppStorage("outputDirectory") var outputDirectoryPath = Defaults.outputDirectory.path
     @AppStorage("model") var model = Defaults.model
     @AppStorage("agyPath") var agyPath = ""
+    @AppStorage("variantCount") var variantCount = 1
+
+    /// The subject IconForge derived last time. If the field still holds this,
+    /// it is ours to replace on the next roll; if it differs, the user typed
+    /// something and we leave it alone.
+    @Published private(set) var derivedSubject = ""
+    /// Recently used subjects, so consecutive rolls stop landing on the same
+    /// object. This is the main reason a reroll used to look like the last one.
+    @Published private(set) var recentSubjects: [String] = []
 
     // State
     @Published private(set) var phase: GenerationPhase = .idle
@@ -94,13 +117,15 @@ final class GeneratorModel: ObservableObject {
     @Published private(set) var previewImage: NSImage?
     @Published private(set) var history: [HistoryEntry] = []
     @Published private(set) var lastPrompt = ""
+    @Published private(set) var variants: [IconVariant] = []
+    @Published private(set) var selectedVariantID: UUID?
 
     // Model discovery
     @Published private(set) var availableModels: [String] = []
     @Published private(set) var isLoadingModels = false
     @Published private(set) var modelListError: String?
 
-    private var handle: AgyProcessHandle?
+    private var handles: [AgyProcessHandle] = []
 
     var canGenerate: Bool {
         !appName.trimmingCharacters(in: .whitespaces).isEmpty
@@ -164,117 +189,252 @@ final class GeneratorModel: ObservableObject {
         let name = appName.trimmingCharacters(in: .whitespacesAndNewlines)
         let description = appDescription.trimmingCharacters(in: .whitespacesAndNewlines)
         let paletteHint = palette.trimmingCharacters(in: .whitespacesAndNewlines)
-        let manualSubject = subject.trimmingCharacters(in: .whitespacesAndNewlines)
-        let variant = style
+        let typedSubject = subject.trimmingCharacters(in: .whitespacesAndNewlines)
+        let styleVariant = style
         let modelName = model
         let baseDir = outputDirectory
         let agyOverride = agyPath
-        let runHandle = AgyProcessHandle()
-        handle = runHandle
+        let count = max(1, min(Defaults.maxVariants, variantCount))
+
+        // Only a subject the user actually typed survives a reroll. One we
+        // derived is thrown away, so the next roll picks a different object.
+        let keepSubject = !typedSubject.isEmpty && typedSubject != derivedSubject
+        let avoid = recentSubjects
+
+        let runHandles = (0..<count).map { _ in AgyProcessHandle() }
+        handles = runHandles
 
         errorMessage = nil
         artifacts = nil
+        variants = []
+        selectedVariantID = nil
         phase = .derivingSubject
         statusDetail = "Checking that agy is reachable…"
 
         Task {
             do {
                 let binary = try AgyRunner.resolveBinary(customPath: agyOverride)
-                let sessionDir = try Self.makeSessionDirectory(base: baseDir, appName: name)
+                let stamp = Self.timestamp()
 
-                // 1. Subject — either typed in, or asked of the model.
-                var resolvedSubject = manualSubject
-                if resolvedSubject.isEmpty {
-                    setPhase(.derivingSubject, detail: "Asking \(modelName) what to draw…")
-                    resolvedSubject = await Self.deriveSubject(binary: binary,
-                                                              model: modelName,
-                                                              appName: name,
-                                                              description: description,
-                                                              sessionDir: sessionDir,
-                                                              handle: runHandle)
-                    subject = resolvedSubject
+                // 1. Subjects: the typed one for every variant, or a fresh set.
+                var subjects: [String]
+                if keepSubject {
+                    subjects = Array(repeating: typedSubject, count: count)
+                } else {
+                    statusDetail = count == 1
+                        ? "Asking \(modelName) what to draw…"
+                        : "Asking \(modelName) for \(count) ideas…"
+                    subjects = await Self.deriveSubjects(binary: binary,
+                                                         model: modelName,
+                                                         appName: name,
+                                                         description: description,
+                                                         count: count,
+                                                         avoiding: avoid,
+                                                         workingDirectory: baseDir,
+                                                         handle: runHandles[0])
+                    derivedSubject = subjects[0]
+                    subject = subjects[0]
                 }
-                if runHandle.isCancelled { throw CancellationError() }
+                if runHandles.contains(where: { $0.isCancelled }) { throw CancellationError() }
 
-                // 2. Artwork.
-                let imagePrompt = PromptBuilder.imagePrompt(appName: name,
-                                                            description: description,
-                                                            subject: resolvedSubject,
-                                                            palette: paletteHint,
-                                                            style: variant)
-                try imagePrompt.write(to: sessionDir.appendingPathComponent("prompt.txt"),
-                                      atomically: true, encoding: .utf8)
-                lastPrompt = imagePrompt
+                // 2. One art-direction recipe per variant, so a batch doesn't
+                // come back as four takes on the same picture.
+                let recipes = VariationRecipe.distinct(count: count)
 
                 phase = .generatingArtwork
-                statusDetail = "\(modelName) is drawing. This usually takes under a minute."
+                statusDetail = count == 1
+                    ? "\(modelName) is drawing. This usually takes under a minute."
+                    : "\(modelName) is drawing \(count) icons…"
 
-                let rawURL = sessionDir.appendingPathComponent("source_raw.png")
-                let started = Date()
-                let instruction = PromptBuilder.agyInstruction(imagePrompt: imagePrompt, outputPath: rawURL.path)
-
-                let output = try await Task.detached(priority: .userInitiated) {
-                    try AgyRunner.run(binary: binary,
-                                      model: modelName,
-                                      prompt: instruction,
-                                      workingDirectory: sessionDir,
-                                      timeout: Defaults.timeoutSeconds,
-                                      handle: runHandle)
-                }.value
-
-                guard let produced = AgyRunner.locateImage(expected: rawURL,
-                                                           output: output,
-                                                           sessionDir: sessionDir,
-                                                           after: started) else {
-                    throw AgyError.noImageProduced(output: output)
-                }
-                if produced != rawURL {
-                    try? FileManager.default.removeItem(at: rawURL)
-                    try FileManager.default.copyItem(at: produced, to: rawURL)
-                }
-
-                // 3. Post-process.
-                phase = .masking
-                statusDetail = "Cropping to 1024, masking, adding the shadow…"
-
-                let built = try await Task.detached(priority: .userInitiated) {
-                    try IconPipeline.process(rawImage: rawURL, into: sessionDir)
-                }.value
-
-                phase = .buildingIconset
-                statusDetail = "Writing every size…"
-
-                let metadata = RunMetadata(appName: name,
-                                           description: description,
-                                           subject: resolvedSubject,
-                                           palette: paletteHint,
-                                           style: variant,
+                let request = BatchRequest(binary: binary,
                                            model: modelName,
-                                           createdAt: Date())
-                Self.writeMetadata(metadata, to: sessionDir)
+                                           appName: name,
+                                           description: description,
+                                           palette: paletteHint,
+                                           style: styleVariant,
+                                           baseDir: baseDir,
+                                           stamp: stamp,
+                                           isBatch: count > 1)
 
-                artifacts = built
-                previewImage = NSImage(contentsOf: built.maskedPNG)
+                var built: [(Int, IconVariant, String)] = []
+                try await withThrowingTaskGroup(of: (Int, IconVariant, String)?.self) { group in
+                    for index in 0..<count {
+                        group.addTask { [request] in
+                            try await Self.buildOne(index: index,
+                                                    subject: subjects[index],
+                                                    recipe: recipes[index],
+                                                    request: request,
+                                                    handle: runHandles[index])
+                        }
+                    }
+                    for try await result in group {
+                        guard let result else { continue }
+                        built.append(result)
+                        let done = built.count
+                        if count > 1 {
+                            statusDetail = "\(done) of \(count) done…"
+                        }
+                    }
+                }
+
+                guard !built.isEmpty else { throw AgyError.noImageProduced(output: "") }
+                built.sort { $0.0 < $1.0 }
+
+                let finished = built.map(\.1)
+                variants = finished
+                selectedVariantID = finished.first?.id
+                artifacts = finished.first?.artifacts
+                previewImage = finished.first?.image
+                lastPrompt = built.first?.2 ?? ""
+                if !keepSubject, let first = finished.first {
+                    derivedSubject = first.subject
+                    subject = first.subject
+                }
+                rememberSubjects(finished.map(\.subject))
+
                 phase = .done
-                statusDetail = "Saved to \(built.sessionDir.lastPathComponent)"
-                handle = nil
+                if finished.count == 1 && count == 1 {
+                    statusDetail = "Saved to \(finished[0].artifacts.sessionDir.lastPathComponent)"
+                } else if finished.count < count {
+                    statusDetail = "\(finished.count) of \(count) came back — pick one"
+                } else {
+                    statusDetail = "\(finished.count) icons ready — pick one"
+                }
+                handles = []
                 reloadHistory()
             } catch is CancellationError {
                 phase = .idle
                 statusDetail = "Cancelled"
-                handle = nil
+                handles = []
             } catch {
                 phase = .failed
                 statusDetail = ""
                 errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-                handle = nil
+                handles = []
             }
         }
     }
 
-    /// Same inputs, fresh roll. The subject field keeps whatever is in it, so a
-    /// regenerate re-rolls the artwork rather than the concept.
+    /// Same inputs, fresh roll. A derived subject is re-derived, so the reroll
+    /// is a different idea rather than the same object drawn again.
     func regenerate() { generate() }
+
+    /// Promote one of the batch to the main preview.
+    func select(_ variant: IconVariant) {
+        applyAfterEditing { [weak self] in
+            guard let self else { return }
+            self.selectedVariantID = variant.id
+            self.artifacts = variant.artifacts
+            self.previewImage = variant.image
+            self.subject = variant.subject
+            self.derivedSubject = variant.subject
+            self.lastPrompt = (try? String(contentsOf: variant.artifacts.sessionDir.appendingPathComponent("prompt.txt"),
+                                           encoding: .utf8)) ?? self.lastPrompt
+            self.statusDetail = "Using \(variant.artifacts.sessionDir.lastPathComponent)"
+        }
+    }
+
+    private func rememberSubjects(_ used: [String]) {
+        for subject in used where !recentSubjects.contains(subject) {
+            recentSubjects.insert(subject, at: 0)
+        }
+        if recentSubjects.count > Defaults.rememberedSubjects {
+            recentSubjects = Array(recentSubjects.prefix(Defaults.rememberedSubjects))
+        }
+    }
+
+    /// The parts of a run that every variant shares.
+    private struct BatchRequest: Sendable {
+        let binary: URL
+        let model: String
+        let appName: String
+        let description: String
+        let palette: String
+        let style: StyleVariant
+        let baseDir: URL
+        let stamp: String
+        let isBatch: Bool
+    }
+
+    /// Generates and post-processes one icon. Returns its index, the finished
+    /// variant, and the prompt that produced it.
+    private static func buildOne(index: Int,
+                                 subject: String,
+                                 recipe: VariationRecipe,
+                                 request: BatchRequest,
+                                 handle: AgyProcessHandle) async throws -> (Int, IconVariant, String)? {
+        let suffix = request.isBatch ? "-v\(index + 1)" : ""
+        let sessionDir = try makeSessionDirectory(base: request.baseDir,
+                                                  appName: request.appName,
+                                                  stamp: request.stamp,
+                                                  suffix: suffix)
+
+        let imagePrompt = PromptBuilder.imagePrompt(appName: request.appName,
+                                                    description: request.description,
+                                                    subject: subject,
+                                                    palette: request.palette,
+                                                    style: request.style,
+                                                    variation: recipe)
+        try imagePrompt.write(to: sessionDir.appendingPathComponent("prompt.txt"),
+                              atomically: true, encoding: .utf8)
+
+        let rawURL = sessionDir.appendingPathComponent("source_raw.png")
+        let instruction = PromptBuilder.agyInstruction(imagePrompt: imagePrompt, outputPath: rawURL.path)
+
+        // agy comes back empty-handed often enough that one retry is worth it,
+        // especially in a batch where a dud costs the user a whole slot.
+        var lastOutput = ""
+        var locatedImage: URL?
+        for attempt in 0..<Defaults.attemptsPerIcon {
+            if handle.isCancelled { throw CancellationError() }
+            let started = Date()
+            lastOutput = try await Task.detached(priority: .userInitiated) {
+                try AgyRunner.run(binary: request.binary,
+                                  model: request.model,
+                                  prompt: instruction,
+                                  workingDirectory: sessionDir,
+                                  timeout: Defaults.timeoutSeconds,
+                                  handle: handle)
+            }.value
+
+            if let produced = AgyRunner.locateImage(expected: rawURL,
+                                                    output: lastOutput,
+                                                    sessionDir: sessionDir,
+                                                    after: started) {
+                locatedImage = produced
+                break
+            }
+            _ = attempt
+        }
+
+        guard let produced = locatedImage else {
+            // A dud shouldn't sink the batch, and it shouldn't leave an empty
+            // folder behind either.
+            try? FileManager.default.removeItem(at: sessionDir)
+            if request.isBatch { return nil }
+            throw AgyError.noImageProduced(output: lastOutput)
+        }
+        if produced != rawURL {
+            try? FileManager.default.removeItem(at: rawURL)
+            try FileManager.default.copyItem(at: produced, to: rawURL)
+        }
+
+        let artifacts = try await Task.detached(priority: .userInitiated) {
+            try IconPipeline.process(rawImage: rawURL, into: sessionDir)
+        }.value
+
+        let metadata = RunMetadata(appName: request.appName,
+                                   description: request.description,
+                                   subject: subject,
+                                   palette: request.palette,
+                                   style: request.style,
+                                   model: request.model,
+                                   createdAt: Date())
+        writeMetadata(metadata, to: sessionDir)
+
+        let image = NSImage(contentsOf: artifacts.maskedPNG)
+        return (index, IconVariant(subject: subject, artifacts: artifacts, image: image), imagePrompt)
+    }
 
     var canClear: Bool {
         guard !phase.isBusy else { return false }
@@ -295,6 +455,14 @@ final class GeneratorModel: ObservableObject {
         NSApp.keyWindow?.makeFirstResponder(nil)
     }
 
+    /// Resigns first responder, then rewrites the text-bound fields on the next
+    /// runloop turn. Doing both in the same turn still let the field editor
+    /// commit over the top of the new values.
+    private func applyAfterEditing(_ work: @escaping @MainActor () -> Void) {
+        endTextEditing()
+        Task { @MainActor in work() }
+    }
+
     /// Empties the window: inputs, preview, and the last run's status. Files
     /// already on disk stay where they are, and so does the gallery.
     func clear() {
@@ -309,6 +477,10 @@ final class GeneratorModel: ObservableObject {
 
         artifacts = nil
         previewImage = nil
+        variants = []
+        selectedVariantID = nil
+        derivedSubject = ""
+        recentSubjects = []
         lastPrompt = ""
         errorMessage = nil
         statusDetail = ""
@@ -316,45 +488,62 @@ final class GeneratorModel: ObservableObject {
     }
 
     func cancel() {
-        handle?.cancel()
+        handles.forEach { $0.cancel() }
         statusDetail = "Stopping…"
-    }
-
-    private func setPhase(_ newPhase: GenerationPhase, detail: String) {
-        phase = newPhase
-        statusDetail = detail
     }
 
     // MARK: - Subject derivation
 
-    private static func deriveSubject(binary: URL,
-                                      model: String,
-                                      appName: String,
-                                      description: String,
-                                      sessionDir: URL,
-                                      handle: AgyProcessHandle) async -> String {
-        let prompt = PromptBuilder.subjectPrompt(appName: appName, description: description)
+    /// Asks for `count` icon-friendly subjects in one call, steering away from
+    /// anything recent. Short of a full set, the list is padded so every
+    /// variant still has something to draw.
+    private static func deriveSubjects(binary: URL,
+                                       model: String,
+                                       appName: String,
+                                       description: String,
+                                       count: Int,
+                                       avoiding used: [String],
+                                       workingDirectory: URL,
+                                       handle: AgyProcessHandle) async -> [String] {
+        try? FileManager.default.createDirectory(at: workingDirectory, withIntermediateDirectories: true)
+
+        let prompt = PromptBuilder.subjectsPrompt(appName: appName,
+                                                  description: description,
+                                                  count: count,
+                                                  avoiding: used)
         let raw = try? await Task.detached(priority: .userInitiated) {
             try AgyRunner.run(binary: binary,
                               model: model,
                               prompt: prompt,
-                              workingDirectory: sessionDir,
-                              timeout: 120,
+                              workingDirectory: workingDirectory,
+                              timeout: 150,
                               handle: handle)
         }.value
 
-        if let raw, let cleaned = PromptBuilder.cleanSubject(raw) { return cleaned }
-        return PromptBuilder.fallbackSubject(description: description)
+        var subjects = raw.map { PromptBuilder.cleanSubjects($0, count: count) } ?? []
+        let fallback = PromptBuilder.fallbackSubject(description: description)
+        while subjects.count < count {
+            subjects.append(subjects.first ?? fallback)
+        }
+        return subjects
     }
 
     // MARK: - Files
 
-    private static func makeSessionDirectory(base: URL, appName: String) throws -> URL {
-        let slug = slugify(appName)
+    static func timestamp() -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd-HHmmss"
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        let stamp = formatter.string(from: Date())
+        return formatter.string(from: Date())
+    }
+
+    /// One folder per icon. A batch shares a timestamp and separates on the
+    /// `-v1`, `-v2` suffix, so the variants of one press sort together.
+    private static func makeSessionDirectory(base: URL,
+                                             appName: String,
+                                             stamp: String,
+                                             suffix: String) throws -> URL {
+        let slug = slugify(appName) + suffix
 
         var dir = base.appendingPathComponent("\(slug)-\(stamp)", isDirectory: true)
         var suffix = 2
@@ -426,7 +615,12 @@ final class GeneratorModel: ObservableObject {
 
     /// Load a past run back into the preview and the input fields.
     func restore(_ entry: HistoryEntry) {
-        endTextEditing()
+        applyAfterEditing { [weak self] in
+            self?.applyRestore(entry)
+        }
+    }
+
+    private func applyRestore(_ entry: HistoryEntry) {
         previewImage = NSImage(contentsOf: entry.iconURL)
         artifacts = IconPipeline.Artifacts(sessionDir: entry.folder,
                                            rawPNG: entry.folder.appendingPathComponent("source_raw.png"),
@@ -434,6 +628,8 @@ final class GeneratorModel: ObservableObject {
                                            iconsetDir: entry.folder.appendingPathComponent("AppIcon.iconset"),
                                            icns: entry.folder.appendingPathComponent("AppIcon.icns"),
                                            ico: entry.folder.appendingPathComponent("AppIcon.ico"))
+        variants = []
+        selectedVariantID = nil
         phase = .done
         errorMessage = nil
         statusDetail = "Loaded \(entry.folder.lastPathComponent)"
@@ -444,6 +640,7 @@ final class GeneratorModel: ObservableObject {
             appDescription = metadata.description
             palette = metadata.palette
             subject = metadata.subject
+            derivedSubject = metadata.subject
             style = metadata.style
         }
     }

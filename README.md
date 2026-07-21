@@ -31,11 +31,15 @@ There is no Homebrew formula because this repo is not published anywhere. The in
 Fill in the name and a short description. Everything else is optional:
 
 - **Subject** is the object the icon shows. Leave it blank and IconForge asks the model to pick one, then writes its answer back into the field so you can edit it and reroll.
-- **Palette** opens a grid of the 50 most-liked [ColorHunt](https://colorhunt.co/palettes/popular) palettes. Pick one and its hex values go into the prompt verbatim, or ignore the grid and type a direction like "sea glass to deep teal" in the field below it.
+- **Palette** opens a grid of 192 trending [Coolors](https://coolors.co/palettes/trending) palettes. Pick one and its hex values go into the prompt verbatim, or ignore the grid and type a direction like "sea glass to deep teal" in the field below it. To swap the library for a different export, run `python3 Tools/generate_palettes.py your-palettes.json` and rebuild.
 - **Style** nudges the render toward Standard, Playful, Minimal, or Glossy.
 - **Model** lists what `agy models` reports, minus the Claude entries. Refresh it with the button next to the picker. To change what gets filtered out, edit `excludedModelPrefixes` in `Sources/IconForge/AgyRunner.swift`.
 
-Press Generate. A run takes roughly fifteen to thirty seconds on the low-effort Gemini models. Reroll repeats the same inputs for a different draw, and the strip along the bottom keeps every past run so you can compare them. Clicking one loads its icon and its inputs back into the window.
+- **Icons per run** generates up to four at once, each with its own subject and its own art direction. They appear as a row under the preview and clicking one makes it the active icon for Export, Reveal and the agent prompt.
+
+Press Generate. One icon takes roughly fifteen to thirty seconds on the low-effort Gemini models; four run in parallel and take about as long as the slowest.
+
+Reroll deliberately changes the idea, not just the pixels. A subject IconForge picked for you is thrown away and re-derived, steering clear of the last dozen it used, so a second press gives you a different object rather than the same one drawn again. Type your own subject and it sticks: only the art direction varies. The strip along the bottom keeps every past run, and clicking one loads its icon and inputs back into the window.
 
 ## Where the files go
 

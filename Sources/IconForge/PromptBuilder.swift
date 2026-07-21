@@ -1,7 +1,7 @@
 import Foundation
 
-/// Style variants offered in the picker. Each one appends a sentence that
-/// nudges the render without breaking the Apple house style.
+/// Style variants offered in the picker. Each one bends the material and the
+/// form language without leaving the Apple house style.
 enum StyleVariant: String, CaseIterable, Identifiable, Codable {
     case standard = "Standard"
     case playful = "Playful"
@@ -10,56 +10,102 @@ enum StyleVariant: String, CaseIterable, Identifiable, Codable {
 
     var id: String { rawValue }
 
-    var symbol: String {
-        switch self {
-        case .standard: return "app.dashed"
-        case .playful: return "face.smiling"
-        case .minimal: return "circle.dashed"
-        case .glossy: return "sparkles"
-        }
-    }
-
     var modifier: String {
         switch self {
         case .standard:
             return ""
         case .playful:
-            return " Lean playful: rounder proportions, a touch more bounce in the form, warmer and more saturated colours."
+            return " Push it playful: rounder, chunkier proportions, a little squash and bounce in the form, warmer saturated colour."
         case .minimal:
-            return " Lean minimal: strip the subject to its simplest readable silhouette, flatter shading, restrained two-colour background."
+            return " Push it minimal: reduce the subject to its simplest readable silhouette, flatter shading, almost no surface detail."
         case .glossy:
-            return " Lean glossy: a polished, slightly reflective surface with a crisp specular highlight and deeper contrast."
+            return " Push it glossy: a polished, slightly reflective surface with one crisp specular highlight and deeper contrast."
+        }
+    }
+}
+
+/// One roll's art direction. Randomising these is what stops a reroll from
+/// handing back the same picture with different pixels.
+struct VariationRecipe {
+    let angle: String
+    let material: String
+    let composition: String
+
+    static let angles = [
+        "Shown straight on, face to camera, symmetrical and square to the frame",
+        "Shown at a gentle three-quarter angle so two faces catch the light",
+        "Shown from slightly above, tilted a few degrees toward the viewer",
+        "Shown straight on with a slight lean, one side catching more light",
+    ]
+
+    static let materials = [
+        "clean matte-to-satin",
+        "soft matte ceramic",
+        "smooth satin with a faint sheen",
+        "dense soft-touch plastic",
+    ]
+
+    static let compositions = [
+        "The subject sits dead centre and takes up about two thirds of the frame",
+        "The subject is centred and generously large, close to filling the safe area",
+        "The subject is centred a touch smaller, with airy margins around it",
+        "The subject is centred and bold, its silhouette unmistakable from across the room",
+    ]
+
+    static func random() -> VariationRecipe {
+        VariationRecipe(angle: angles.randomElement() ?? angles[0],
+                        material: materials.randomElement() ?? materials[0],
+                        composition: compositions.randomElement() ?? compositions[0])
+    }
+
+    /// Distinct recipes for a batch, so the variants don't collide with each other.
+    static func distinct(count: Int) -> [VariationRecipe] {
+        let shuffledAngles = angles.shuffled()
+        let shuffledMaterials = materials.shuffled()
+        let shuffledCompositions = compositions.shuffled()
+        return (0..<count).map { index in
+            VariationRecipe(angle: shuffledAngles[index % shuffledAngles.count],
+                            material: shuffledMaterials[index % shuffledMaterials.count],
+                            composition: shuffledCompositions[index % shuffledCompositions.count])
         }
     }
 }
 
 enum PromptBuilder {
 
-    /// The image prompt handed to agy. The trailing "do not draw a rounded
-    /// square" instruction has to stay in sync with the squircle mask the
-    /// pipeline applies afterwards — two frames would be one too many.
+    /// The image prompt handed to agy. The "do not draw a rounded square" line
+    /// has to stay in sync with the squircle mask the pipeline applies
+    /// afterwards, or the icon ends up with two frames.
     static func imagePrompt(appName: String,
                             description: String,
                             subject: String,
                             palette: String,
-                            style: StyleVariant) -> String {
+                            style: StyleVariant,
+                            variation: VariationRecipe) -> String {
         let trimmedPalette = palette.trimmingCharacters(in: .whitespacesAndNewlines)
-        let paletteClause = trimmedPalette.isEmpty ? "" : " (\(trimmedPalette))"
+        let paletteClause = trimmedPalette.isEmpty
+            ? "a cohesive two or three colour palette that suits the app's purpose"
+            : trimmedPalette
 
         return """
-        A macOS app icon for \(appName) — an app that \(description). The icon shows \(subject), a single centered subject that reads instantly at small sizes.
+        A macOS app icon for \(appName) — an app that \(description).
 
-        Render it in the current Apple macOS style — the family look of Notes, Reminders, Podcasts, and Maps. The subject is a smooth, softly three-dimensional object with rounded edges and a clean matte-to-satin surface, lit from top-center by a soft light with gentle highlights on upper faces and subtle shadow beneath. Simplified and iconic, never busy — one hero object, minimal detail, no clutter.\(style.modifier)
+        Subject: \(subject). One single object, nothing else in the picture.
 
-        Background: a smooth vertical gradient in a cohesive 2–3 color palette\(paletteClause) that fits the app's purpose, brighter at the top, filling the whole frame. The subject floats slightly above it with a short, soft contact shadow.
+        Style: the current Apple macOS icon look, the family Notes, Reminders, Podcasts and Maps belong to. A smooth, softly three-dimensional object with generously rounded edges and corners and a \(variation.material) surface. \(variation.angle). Lit from above by one broad soft studio light: gentle highlights along the upper edges, soft shading underneath, no harsh speculars and no rim lighting. Confident and simplified — bold primary forms, very little surface detail, nothing fiddly or ornamental.\(style.modifier)
 
-        Format: 1024x1024, subject centered with even breathing room on all sides, crisp edges, high detail. The artwork must fill the entire square and bleed off all four straight edges. Do NOT draw a rounded square, border, frame, or squircle outline — the rounded icon mask is applied afterward. No text, letters, numbers, or logos anywhere.
+        Composition: \(variation.composition). The silhouette has to stay obvious at 16 pixels, so keep the shape chunky and clearly separated from the background, with even breathing room on all four sides.
+
+        Background: a smooth vertical gradient built from \(paletteClause), brighter at the top, filling the whole frame edge to edge. The subject reads clearly against it and floats just above it with one short, soft contact shadow.
+
+        Format: 1024x1024, crisp clean edges, no noise or grain, no banding. The artwork fills the entire square and bleeds off all four straight edges.
+
+        Do not draw: a rounded square, outline, border, frame or badge of any kind — the rounded icon mask is applied afterwards. No text, letters, numbers or logos. No second object, no hands, no people, no scenery, no desk, table or floor. No photographic realism, no stock-photo lighting, no busy fine detail, no drop shadow outside the subject.
         """
     }
 
     /// agy is an agentic CLI, not a bare image endpoint: it only leaves a file
-    /// behind when the prompt tells it where to put one, so the save
-    /// instruction is appended to whatever goes over the wire.
+    /// behind when the prompt tells it where to put one.
     static func agyInstruction(imagePrompt: String, outputPath: String) -> String {
         """
         Generate a single image from this description:
@@ -72,35 +118,60 @@ enum PromptBuilder {
         """
     }
 
-    /// Asks agy for the one literal object the artwork should show.
-    static func subjectPrompt(appName: String, description: String) -> String {
-        """
+    /// Asks agy for icon-friendly subjects. More than one at a time keeps a
+    /// batch from drawing the same object four ways.
+    static func subjectsPrompt(appName: String,
+                               description: String,
+                               count: Int,
+                               avoiding used: [String]) -> String {
+        let avoidClause = used.isEmpty
+            ? ""
+            : "\n\nDo not suggest any of these, or anything close to them: \(used.joined(separator: "; "))."
+
+        let quantity = count == 1
+            ? "Name one object"
+            : "Name \(count) genuinely different objects, one per line, no numbering or bullets"
+
+        return """
         An app called "\(appName)" does this: \(description)
 
-        Name the single most literal physical object that would represent it on an app icon. \
-        One object, no scene, no text, nothing abstract.
+        \(quantity) that could each represent it on an app icon.
 
-        Reply with only that object as a short noun phrase of 2 to 5 words, lowercase, no punctuation, no explanation. \
-        Example replies: "a paper airplane", "a brass compass", "a stack of coins".
+        Each one must be a single physical object with a simple, chunky silhouette that still reads at 16 pixels. \
+        No scenes, no arrangements of several things, no abstract shapes, no text, no screens showing content. \
+        Prefer everyday objects with a strong recognisable outline.
+
+        Reply with the objects only, lowercase, 2 to 5 words each, no punctuation and no explanation. \
+        Example replies: "a paper airplane", "a brass compass", "a stack of coins".\(avoidClause)
         """
     }
 
-    /// agy sometimes wraps its answer in quotes or a sentence; keep the last
-    /// usable line and drop anything that looks like commentary.
-    static func cleanSubject(_ raw: String) -> String? {
-        let line = raw
-            .split(separator: "\n")
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .last(where: { !$0.isEmpty })
+    /// Pulls usable subjects out of whatever agy printed.
+    static func cleanSubjects(_ raw: String, count: Int) -> [String] {
+        var seen = Set<String>()
+        var results: [String] = []
 
-        guard var subject = line else { return nil }
-        subject = subject.trimmingCharacters(in: CharacterSet(charactersIn: "\"'`.*_ "))
-        guard !subject.isEmpty, subject.count <= 60, subject.split(separator: " ").count <= 8 else { return nil }
-        return subject
+        for line in raw.split(separator: "\n") {
+            var candidate = line.trimmingCharacters(in: .whitespaces)
+            // Strip list markers: "1.", "1)", "-", "*", "•"
+            candidate = candidate.replacingOccurrences(of: #"^\s*(\d+[\.\)]|[-*•])\s*"#,
+                                                       with: "",
+                                                       options: .regularExpression)
+            candidate = candidate.trimmingCharacters(in: CharacterSet(charactersIn: "\"'`.*_ "))
+
+            guard !candidate.isEmpty,
+                  candidate.count <= 60,
+                  candidate.split(separator: " ").count <= 8,
+                  !candidate.contains(":"),
+                  seen.insert(candidate.lowercased()).inserted else { continue }
+
+            results.append(candidate)
+            if results.count == count { break }
+        }
+        return results
     }
 
-    /// Last-resort subject when the model call fails — the description itself
-    /// still gives the image model something concrete to hold onto.
+    /// Last-resort subject when the model call fails.
     static func fallbackSubject(description: String) -> String {
         "a single object representing \(description.trimmingCharacters(in: .whitespacesAndNewlines))"
     }
