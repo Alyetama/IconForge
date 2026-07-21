@@ -16,16 +16,30 @@ enum GeneratorBackend: String, CaseIterable, Identifiable, Codable {
         }
     }
 
+    /// Models this backend offers. agy returns nil because it lists its own.
+    var models: [String]? {
+        switch self {
+        case .agy: return nil
+        case .codex: return ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"]
+        }
+    }
+
+    /// agy encodes effort in the model id itself (…-low, …-high), so there is
+    /// nothing separate to choose.
+    var supportsEffort: Bool { self == .codex }
+
+    static let effortLevels = ["low", "medium", "high", "max"]
+
     /// codex refuses to run outside a git repo without being told not to care,
     /// and takes its reasoning effort through a config override.
-    func arguments(model: String, prompt: String) -> [String] {
+    func arguments(model: String, effort: String, prompt: String) -> [String] {
         switch self {
         case .agy:
             return ["--model", model, "-p", prompt]
         case .codex:
             return ["exec", prompt,
                     "--model", model,
-                    "-c", "model_reasoning_effort=\"low\"",
+                    "-c", "model_reasoning_effort=\"\(effort)\"",
                     "--skip-git-repo-check"]
         }
     }
@@ -36,7 +50,7 @@ enum GeneratorBackend: String, CaseIterable, Identifiable, Codable {
     var blurb: String {
         switch self {
         case .agy: return "gemini models, lists its own"
-        case .codex: return "gpt models, type the name yourself"
+        case .codex: return "gpt models, effort chosen separately"
         }
     }
 }
@@ -242,6 +256,7 @@ enum AgyRunner {
     /// Blocking — call it off the main thread.
     static func run(binary: URL,
                     backend: GeneratorBackend = .agy,
+                    effort: String = "low",
                     model: String,
                     prompt: String,
                     workingDirectory: URL,
@@ -249,7 +264,7 @@ enum AgyRunner {
                     handle: AgyProcessHandle) throws -> String {
         let process = Process()
         process.executableURL = binary
-        process.arguments = backend.arguments(model: model, prompt: prompt)
+        process.arguments = backend.arguments(model: model, effort: effort, prompt: prompt)
         process.currentDirectoryURL = workingDirectory
 
         // Give the child a PATH that includes wherever agy itself lives, so any

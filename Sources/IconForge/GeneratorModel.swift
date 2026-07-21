@@ -107,6 +107,8 @@ final class GeneratorModel: ObservableObject {
     /// hold it; the picker binds through `backend`.
     @AppStorage("backend") private var backendRaw = GeneratorBackend.agy.rawValue
     @AppStorage("variantCount") var variantCount = 1
+    /// Reasoning effort, for backends that take it as a separate setting.
+    @AppStorage("effort") var effort = "low"
 
     /// The subject IconForge derived last time. If the field still holds this,
     /// it is ours to replace on the next roll; if it differs, the user typed
@@ -203,6 +205,7 @@ final class GeneratorModel: ObservableObject {
             backendRaw = newValue.rawValue
             // Model names do not carry across CLIs.
             model = newValue.defaultModel
+            if !newValue.supportsEffort { effort = "low" }
             availableModels = []
             modelListError = nil
             if newValue.canListModels { loadModels() }
@@ -216,6 +219,9 @@ final class GeneratorModel: ObservableObject {
     /// The picker's contents: whatever agy reported, plus the current choice if
     /// it isn't in that list (a hand-typed or since-removed model).
     var modelChoices: [String] {
+        if let fixed = backend.models {
+            return fixed.contains(model) ? fixed : [model] + fixed
+        }
         var choices = availableModels
         let excluded = AgyRunner.excludedModelPrefixes.contains { model.lowercased().hasPrefix($0) }
         if !model.isEmpty && !excluded && !choices.contains(model) { choices.insert(model, at: 0) }
@@ -271,6 +277,7 @@ final class GeneratorModel: ObservableObject {
         let baseDir = outputDirectory
         let agyOverride = agyPath
         let chosenBackend = backend
+        let chosenEffort = effort
         let count = max(1, min(Defaults.maxVariants, variantCount))
 
         // If the field has something in it, it is the user's and it wins. The
@@ -308,6 +315,7 @@ final class GeneratorModel: ObservableObject {
                                                      subject: typedSubject,
                                                      workingDirectory: baseDir,
                                                      backend: chosenBackend,
+                                                     effort: chosenEffort,
                                                      handle: runHandles[0])
                     subjects = Array(repeating: PromptBuilder.SubjectIdea(subject: typedSubject, form: form),
                                      count: count)
@@ -323,6 +331,7 @@ final class GeneratorModel: ObservableObject {
                                                          avoiding: avoid,
                                                          workingDirectory: baseDir,
                                                          backend: chosenBackend,
+                                                         effort: chosenEffort,
                                                          handle: runHandles[0])
                     derivedSubject = subjects[0].subject
                 }
@@ -346,6 +355,7 @@ final class GeneratorModel: ObservableObject {
                                            baseDir: baseDir,
                                            stamp: stamp,
                                            backend: chosenBackend,
+                                           effort: chosenEffort,
                                            isBatch: count > 1,
                                            finish: finish,
                                            bodySize: bodySize)
@@ -477,6 +487,7 @@ final class GeneratorModel: ObservableObject {
         let chosenFinish = finish
         let chosenBodySize = bodySize
         let chosenBackend = backend
+        let chosenEffort = effort
         let styleVariant = style
         let paletteHint = palette.trimmingCharacters(in: .whitespacesAndNewlines)
         let runHandle = AgyProcessHandle()
@@ -508,6 +519,7 @@ final class GeneratorModel: ObservableObject {
                 let output = try await Task.detached(priority: .userInitiated) {
                     try AgyRunner.run(binary: binary,
                                       backend: chosenBackend,
+                                      effort: chosenEffort,
                                       model: modelName,
                                       prompt: instruction,
                                       workingDirectory: sessionDir,
@@ -608,6 +620,7 @@ final class GeneratorModel: ObservableObject {
         let baseDir: URL
         let stamp: String
         let backend: GeneratorBackend
+        let effort: String
         let isBatch: Bool
         let finish: IconFinish
         let bodySize: IconBodySize
@@ -768,6 +781,7 @@ final class GeneratorModel: ObservableObject {
                                        avoiding used: [String],
                                        workingDirectory: URL,
                                        backend: GeneratorBackend,
+                                       effort: String,
                                        handle: AgyProcessHandle) async -> [PromptBuilder.SubjectIdea] {
         try? FileManager.default.createDirectory(at: workingDirectory, withIntermediateDirectories: true)
 
@@ -778,6 +792,7 @@ final class GeneratorModel: ObservableObject {
         let raw = try? await Task.detached(priority: .userInitiated) {
             try AgyRunner.run(binary: binary,
                               backend: backend,
+                              effort: effort,
                               model: model,
                               prompt: prompt,
                               workingDirectory: workingDirectory,
@@ -801,11 +816,13 @@ final class GeneratorModel: ObservableObject {
                                    subject: String,
                                    workingDirectory: URL,
                                    backend: GeneratorBackend,
+                                   effort: String,
                                    handle: AgyProcessHandle) async -> String? {
         try? FileManager.default.createDirectory(at: workingDirectory, withIntermediateDirectories: true)
         let raw = try? await Task.detached(priority: .userInitiated) {
             try AgyRunner.run(binary: binary,
                               backend: backend,
+                              effort: effort,
                               model: model,
                               prompt: PromptBuilder.formPrompt(subject: subject),
                               workingDirectory: workingDirectory,

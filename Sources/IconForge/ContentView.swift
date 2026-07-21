@@ -101,16 +101,33 @@ private struct InspectorPane: View {
                 }
 
                 FieldGroup(title: "Model", symbol: "cpu",
-                           hint: model.isLoadingModels ? "reading agy models…" : nil) {
+                           hint: model.isLoadingModels ? "reading agy models…"
+                                                       : (model.backend.supportsEffort ? nil : "effort is part of the model name")) {
                     HStack(spacing: 8) {
-                        if model.backend.canListModels {
-                            Picker("", selection: $model.model) {
-                                ForEach(model.modelChoices, id: \.self) { name in
-                                    Text(name).tag(name)
-                                }
+                        Picker("", selection: $model.model) {
+                            ForEach(model.modelChoices, id: \.self) { name in
+                                Text(name).tag(name)
                             }
-                            .labelsHidden()
+                        }
+                        .labelsHidden()
+                        .frame(maxWidth: .infinity)
 
+                        // Greyed out for agy, whose model ids already carry
+                        // their effort (…-low, …-high).
+                        Picker("", selection: $model.effort) {
+                            ForEach(GeneratorBackend.effortLevels, id: \.self) { level in
+                                Text(level).tag(level)
+                            }
+                        }
+                        .labelsHidden()
+                        .frame(width: 108)
+                        .disabled(!model.backend.supportsEffort)
+                        .opacity(model.backend.supportsEffort ? 1 : 0.4)
+                        .help(model.backend.supportsEffort
+                              ? "Reasoning effort passed to codex"
+                              : "agy encodes effort in the model name")
+
+                        if model.backend.canListModels {
                             Button {
                                 model.loadModels()
                             } label: {
@@ -118,9 +135,6 @@ private struct InspectorPane: View {
                             }
                             .disabled(model.isLoadingModels)
                             .help("Re-read the list from `agy models`")
-                        } else {
-                            TextField(model.backend.defaultModel, text: $model.model)
-                                .textFieldStyle(.roundedBorder)
                         }
                     }
                 }
