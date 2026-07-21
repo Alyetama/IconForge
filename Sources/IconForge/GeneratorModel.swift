@@ -28,6 +28,26 @@ enum Defaults {
     }
 }
 
+/// Holds the first error a batch swallowed, so a run where every variant failed
+/// can still say what went wrong. Lock-guarded because the task group's children
+/// write to it concurrently.
+final class FailureBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: Error?
+
+    func record(_ error: Error) {
+        lock.lock()
+        if stored == nil { stored = error }
+        lock.unlock()
+    }
+
+    var error: Error? {
+        lock.lock()
+        defer { lock.unlock() }
+        return stored
+    }
+}
+
 /// Sidecar written next to each icon so the gallery can describe past rolls.
 struct RunMetadata: Codable {
     var appName: String
@@ -128,7 +148,14 @@ final class GeneratorModel: ObservableObject {
     @Published private(set) var statusDetail = ""
     @Published private(set) var errorMessage: String?
     @Published private(set) var artifacts: IconPipeline.Artifacts?
-    @Published private(set) var previewImage: NSImage?
+    @Published private(set) var previewImage: NSImage? {
+        didSet { previewIsFullBleed = Self.hasOpaqueCorners(previewImage) }
+    }
+    /// Whether the icon on screen is a plain square awaiting the system's own
+    /// rounding. Read off the artwork rather than the Body size picker: a run
+    /// restored from the gallery was drawn with whatever setting was in force
+    /// back then, and trusting the picker double-rounded it in the preview.
+    @Published private(set) var previewIsFullBleed = false
     @Published private(set) var history: [HistoryEntry] = []
     @Published private(set) var lastPrompt = ""
     @Published private(set) var variants: [IconVariant] = []
@@ -387,15 +414,28 @@ final class GeneratorModel: ObservableObject {
                                            finish: finish,
                                            bodySize: bodySize)
 
+                // A batch keeps whatever came back. One call exiting non-zero
+                // used to throw straight out of the group, which discarded every
+                // icon that had already succeeded — the error was reported and
+                // three finished icons on disk were never shown.
+                let firstFailure = FailureBox()
                 var built: [(Int, IconVariant, String)] = []
                 try await withThrowingTaskGroup(of: (Int, IconVariant, String)?.self) { group in
                     for index in 0..<count {
                         group.addTask { [request] in
-                            try await Self.buildOne(index: index,
-                                                    idea: subjects[index],
-                                                    recipe: recipes[index],
-                                                    request: request,
-                                                    handle: runHandles[index])
+                            do {
+                                return try await Self.buildOne(index: index,
+                                                               idea: subjects[index],
+                                                               recipe: recipes[index],
+                                                               request: request,
+                                                               handle: runHandles[index])
+                            } catch is CancellationError {
+                                throw CancellationError()
+                            } catch {
+                                guard request.isBatch else { throw error }
+                                firstFailure.record(error)
+                                return nil
+                            }
                         }
                     }
                     for try await result in group {
@@ -408,7 +448,13 @@ final class GeneratorModel: ObservableObject {
                     }
                 }
 
-                guard !built.isEmpty else { throw AgyError.noImageProduced(tool: chosenBackend.rawValue, output: "") }
+                // Nothing survived: report why the first one actually failed
+                // rather than a generic "no image", which the swallowed errors
+                // above would otherwise hide.
+                guard !built.isEmpty else {
+                    throw firstFailure.error
+                        ?? AgyError.noImageProduced(tool: chosenBackend.rawValue, output: "")
+                }
                 built.sort { $0.0 < $1.0 }
 
                 let finished = built.map(\.1)
@@ -434,10 +480,15 @@ final class GeneratorModel: ObservableObject {
                 handles = []
                 reloadHistory()
             } catch is CancellationError {
+                // Terminate before dropping the handles: clearing them first
+                // orphans any sibling still drawing, which then runs to
+                // completion unseen and still costs a call.
+                runHandles.forEach { $0.cancel() }
                 phase = .idle
                 statusDetail = "Cancelled"
                 handles = []
             } catch {
+                runHandles.forEach { $0.cancel() }
                 phase = .failed
                 statusDetail = ""
                 errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
@@ -450,16 +501,26 @@ final class GeneratorModel: ObservableObject {
     /// is a different idea rather than the same object drawn again.
     func regenerate() { generate() }
 
+    /// True while a local re-render is in flight, so two quick picker changes
+    /// can't run two pipelines over the same folder at once.
+    private var isReapplying = false
+
     /// Re-runs the local part of the pipeline with the current finish. The raw
     /// artwork is untouched, so this is reversible and free.
     func reapplyFinish() {
-        guard let current = artifacts, !phase.isBusy else { return }
+        guard artifacts != nil, !phase.isBusy, !isReapplying else { return }
+        runReapply()
+    }
+
+    private func runReapply() {
+        guard let current = artifacts else { return }
         let chosen = finish
         let chosenSize = bodySize
         let raw = current.rawPNG
         let dir = current.sessionDir
         guard FileManager.default.fileExists(atPath: raw.path) else { return }
 
+        isReapplying = true
         Task {
             do {
                 let rebuilt = try await Task.detached(priority: .userInitiated) {
@@ -476,6 +537,14 @@ final class GeneratorModel: ObservableObject {
                 reloadHistory()
             } catch {
                 errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            }
+            isReapplying = false
+
+            // The picker moved while that was rendering, so render what it says
+            // now. Dropping the change instead would leave the control showing a
+            // finish the icon on screen doesn't have.
+            if finish != chosen || bodySize != chosenSize {
+                runReapply()
             }
         }
     }
@@ -686,7 +755,7 @@ final class GeneratorModel: ObservableObject {
         // especially in a batch where a dud costs the user a whole slot.
         var lastOutput = ""
         var locatedImage: URL?
-        for attempt in 0..<request.attempts {
+        for _ in 0..<request.attempts {
             if handle.isCancelled { throw CancellationError() }
             let started = Date()
             lastOutput = try await Task.detached(priority: .userInitiated) {
@@ -707,7 +776,6 @@ final class GeneratorModel: ObservableObject {
                 locatedImage = produced
                 break
             }
-            _ = attempt
         }
 
         guard let produced = locatedImage else {
@@ -868,6 +936,39 @@ final class GeneratorModel: ObservableObject {
         return line.trimmingCharacters(in: CharacterSet(charactersIn: "\"'`.* "))
     }
 
+    // MARK: - Artwork shape
+
+    /// A masked icon leaves its corners transparent; a full-bleed one fills
+    /// them. One pixel just inside the corner tells the two apart.
+    static func hasOpaqueCorners(_ image: NSImage?) -> Bool {
+        guard let image,
+              let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
+        else { return false }
+
+        // Far enough in to clear any antialiased edge, well short of the artwork.
+        let inset = max(1, cgImage.width / 40)
+        return cornerAlpha(of: cgImage, x: inset, y: inset) > 0.5
+    }
+
+    /// Alpha of a single pixel, by drawing just that pixel into a 1x1 context.
+    private static func cornerAlpha(of image: CGImage, x: Int, y: Int) -> CGFloat {
+        var pixel: [UInt8] = [0, 0, 0, 0]
+        guard let space = CGColorSpace(name: CGColorSpace.sRGB) else { return 1 }
+        let drawn: Bool = pixel.withUnsafeMutableBytes { buffer -> Bool in
+            guard let ctx = CGContext(data: buffer.baseAddress,
+                                      width: 1, height: 1,
+                                      bitsPerComponent: 8, bytesPerRow: 4,
+                                      space: space,
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+            else { return false }
+            ctx.draw(image, in: CGRect(x: -x, y: -y,
+                                       width: image.width, height: image.height))
+            return true
+        }
+        guard drawn else { return 1 }
+        return CGFloat(pixel[3]) / 255
+    }
+
     // MARK: - Files
 
     static func timestamp() -> String {
@@ -886,10 +987,10 @@ final class GeneratorModel: ObservableObject {
         let slug = slugify(appName) + suffix
 
         var dir = base.appendingPathComponent("\(slug)-\(stamp)", isDirectory: true)
-        var suffix = 2
+        var duplicate = 2
         while FileManager.default.fileExists(atPath: dir.path) {
-            dir = base.appendingPathComponent("\(slug)-\(stamp)-\(suffix)", isDirectory: true)
-            suffix += 1
+            dir = base.appendingPathComponent("\(slug)-\(stamp)-\(duplicate)", isDirectory: true)
+            duplicate += 1
         }
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir

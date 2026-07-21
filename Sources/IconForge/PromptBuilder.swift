@@ -159,8 +159,15 @@ struct VariationRecipe {
         "The object is centred and feels close to the camera, large and softly rounded, its silhouette unmistakable.",
     ]
 
+    /// The materials a style allows, never empty — an empty list would make the
+    /// `% count` below divide by zero.
+    private static func materialPool(for style: StyleVariant) -> [String] {
+        guard let preferred = style.preferredMaterials, !preferred.isEmpty else { return materials }
+        return preferred
+    }
+
     static func random(style: StyleVariant = .standard) -> VariationRecipe {
-        let pool = style.preferredMaterials ?? materials
+        let pool = materialPool(for: style)
         return VariationRecipe(angle: angles.randomElement() ?? angles[0],
                                material: pool.randomElement() ?? materials[0],
                                composition: compositions.randomElement() ?? compositions[0])
@@ -169,7 +176,7 @@ struct VariationRecipe {
     /// Distinct recipes for a batch, so the variants don't collide with each other.
     static func distinct(count: Int, style: StyleVariant = .standard) -> [VariationRecipe] {
         let shuffledAngles = angles.shuffled()
-        let shuffledMaterials = (style.preferredMaterials ?? materials).shuffled()
+        let shuffledMaterials = materialPool(for: style).shuffled()
         let shuffledCompositions = compositions.shuffled()
         return (0..<count).map { index in
             VariationRecipe(angle: shuffledAngles[index % shuffledAngles.count],
@@ -370,7 +377,7 @@ enum PromptBuilder {
         """
         Describe the physical shape of \(subject) for someone modelling it in 3D.
 
-        The masses it is built from, its proportions, and what makes its outline recognisable.         Eight to eighteen words. No colours, no materials, no mood, no preamble.
+        The masses it is built from, its proportions, and what makes its outline recognisable. Eight to eighteen words. No colours, no materials, no mood, no preamble.
 
         Reply with the description only.
         """

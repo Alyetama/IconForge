@@ -303,7 +303,10 @@ private struct InspectorPane: View {
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
-                if error.contains("agy path") {
+                // Matches the opening line of AgyError.notFound. The old test
+                // looked for "agy path", which no error has ever contained, so
+                // this shortcut never appeared on the one error it is for.
+                if error.hasPrefix("Could not find") {
                     Button("Open Settings") { showingSettings = true }
                         .buttonStyle(.link)
                 }
@@ -572,7 +575,7 @@ private struct PreviewPane: View {
                 VStack(spacing: 6) {
                     IconThumb(image: model.previewImage,
                               side: CGFloat(size),
-                              roundsAtDisplayTime: model.bodySize == .fullBleed)
+                              roundsAtDisplayTime: model.previewIsFullBleed)
                         .frame(width: CGFloat(size), height: CGFloat(size))
                     Text("\(size)pt")
                         .font(.caption2)
@@ -1063,6 +1066,8 @@ private struct SettingsSheet: View {
                     model.variantCount = 1
                     model.attemptsPerIcon = Defaults.attemptsPerIcon
                     model.timeoutSeconds = Defaults.timeoutSeconds
+                    model.finish = .appleEdge
+                    model.bodySize = .fullBleed
                 }
                 Spacer()
                 Button("Done") {
