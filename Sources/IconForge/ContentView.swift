@@ -935,67 +935,134 @@ private struct SettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 0) {
             Text("Settings").font(.title3.weight(.semibold))
+                .padding(.bottom, 14)
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Output folder").font(.callout.weight(.medium))
-                HStack {
-                    TextField("", text: $model.outputDirectoryPath)
-                        .textFieldStyle(.roundedBorder)
-                        .truncationMode(.head)
-                    Button("Choose…") { model.chooseOutputDirectory() }
-                }
-                Text("Each run gets its own subfolder, so nothing overwrites anything.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    section("Generator", "terminal") {
+                        Picker("", selection: Binding(get: { model.backend },
+                                                      set: { model.backend = $0 })) {
+                            ForEach(GeneratorBackend.allCases) { option in
+                                Text(option.rawValue).tag(option)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Model").font(.callout.weight(.medium))
-                HStack {
-                    Picker("", selection: $model.model) {
-                        ForEach(model.modelChoices, id: \.self) { name in
-                            Text(name).tag(name)
+                        HStack(spacing: 8) {
+                            Picker("", selection: $model.model) {
+                                ForEach(model.modelChoices, id: \.self) { name in
+                                    Text(name).tag(name)
+                                }
+                            }
+                            .labelsHidden()
+                            .fixedSize()
+
+                            Picker("", selection: $model.effort) {
+                                ForEach(GeneratorBackend.effortLevels, id: \.self) { level in
+                                    Text(level).tag(level)
+                                }
+                            }
+                            .labelsHidden()
+                            .fixedSize()
+                            .disabled(!model.backend.supportsEffort)
+                            .opacity(model.backend.supportsEffort ? 1 : 0.4)
+
+                            if model.backend.canListModels {
+                                Button("Refresh") { model.loadModels() }
+                                    .disabled(model.isLoadingModels)
+                            }
+                            Spacer(minLength: 0)
+                        }
+
+                        caption(model.backend == .agy
+                                ? "agy lists its own models and carries effort in the name."
+                                : "codex takes the effort separately, from low to max.")
+                        if let listError = model.modelListError {
+                            Text(listError).font(.caption).foregroundStyle(.orange).lineLimit(3)
                         }
                     }
-                    .labelsHidden()
 
-                    if model.isLoadingModels {
-                        ProgressView().controlSize(.small)
-                    } else {
-                        Button("Refresh") { model.loadModels() }
+                    section("Generation", "sparkles") {
+                        LabeledContent("Icons per run") {
+                            Picker("", selection: $model.variantCount) {
+                                ForEach(1...Defaults.maxVariants, id: \.self) { Text("\($0)").tag($0) }
+                            }
+                            .pickerStyle(.segmented)
+                            .labelsHidden()
+                            .frame(width: 160)
+                        }
+                        LabeledContent("Tries per icon") {
+                            Stepper(value: $model.attemptsPerIcon, in: 1...4) {
+                                Text("\(model.attemptsPerIcon)")
+                            }
+                            .frame(width: 110)
+                        }
+                        LabeledContent("Timeout") {
+                            Stepper(value: $model.timeoutSeconds, in: 60...900, step: 30) {
+                                Text("\(model.timeoutSeconds)s")
+                            }
+                            .frame(width: 130)
+                        }
+                        caption("A dud icon is retried before it is given up on. The timeout applies to each call.")
+                    }
+
+                    section("Icon shape", "square.on.square") {
+                        LabeledContent("Finish") {
+                            Picker("", selection: $model.finish) {
+                                ForEach(IconFinish.allCases) { Text($0.rawValue).tag($0) }
+                            }
+                            .labelsHidden()
+                            .fixedSize()
+                        }
+                        LabeledContent("Body size") {
+                            Picker("", selection: $model.bodySize) {
+                                ForEach(IconBodySize.allCases) { Text($0.rawValue).tag($0) }
+                            }
+                            .labelsHidden()
+                            .fixedSize()
+                        }
+                        caption("Both re-render the current icon locally, without calling the generator.")
+                    }
+
+                    section("Files", "folder") {
+                        HStack {
+                            TextField("", text: $model.outputDirectoryPath)
+                                .textFieldStyle(.roundedBorder)
+                                .truncationMode(.head)
+                            Button("Choose…") { model.chooseOutputDirectory() }
+                            Button("Reveal") { model.revealInFinder() }
+                        }
+                        caption("Each run gets its own subfolder, so nothing overwrites anything.")
+                    }
+
+                    section("Binary paths", "chevron.left.forwardslash.chevron.right") {
+                        TextField("agy: found automatically", text: $model.agyPath)
+                            .textFieldStyle(.roundedBorder)
+                        TextField("codex: found automatically", text: $model.codexPath)
+                            .textFieldStyle(.roundedBorder)
+                        caption("Only needed if either lives somewhere unusual. Run `which agy` or `which codex`.")
                     }
                 }
-                if let listError = model.modelListError {
-                    Text(listError)
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                        .lineLimit(3)
-                } else {
-                    Text("Read from `agy models` when the app starts.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                .padding(.trailing, 4)
             }
+            .frame(height: 420)
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Binary paths").font(.callout.weight(.medium))
-                TextField("agy: found automatically", text: $model.agyPath)
-                    .textFieldStyle(.roundedBorder)
-                TextField("codex: found automatically", text: $model.codexPath)
-                    .textFieldStyle(.roundedBorder)
-                Text("Only needed if either lives somewhere unusual. Run `which agy` or `which codex`.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+            Divider().padding(.vertical, 12)
 
             HStack {
                 Button("Reset to defaults") {
                     model.outputDirectoryPath = Defaults.outputDirectory.path
-                    model.model = Defaults.model
+                    model.backend = .agy
+                    model.model = GeneratorBackend.agy.defaultModel
+                    model.effort = "low"
                     model.agyPath = ""
                     model.codexPath = ""
+                    model.variantCount = 1
+                    model.attemptsPerIcon = Defaults.attemptsPerIcon
+                    model.timeoutSeconds = Defaults.timeoutSeconds
                 }
                 Spacer()
                 Button("Done") {
@@ -1006,6 +1073,24 @@ private struct SettingsSheet: View {
             }
         }
         .padding(24)
-        .frame(width: 460)
+        .frame(width: 520)
+    }
+
+    @ViewBuilder
+    private func section(_ title: String, _ symbol: String,
+                         @ViewBuilder content: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(title, systemImage: symbol)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            content()
+        }
+    }
+
+    private func caption(_ text: String) -> some View {
+        Text(text)
+            .font(.caption)
+            .foregroundStyle(.tertiary)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }

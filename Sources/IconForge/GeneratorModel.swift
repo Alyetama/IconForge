@@ -110,6 +110,9 @@ final class GeneratorModel: ObservableObject {
     @AppStorage("variantCount") var variantCount = 1
     /// Reasoning effort, for backends that take it as a separate setting.
     @AppStorage("effort") var effort = "low"
+    /// How long a single CLI call may take, and how many tries each icon gets.
+    @AppStorage("timeoutSeconds") var timeoutSeconds = Defaults.timeoutSeconds
+    @AppStorage("attemptsPerIcon") var attemptsPerIcon = Defaults.attemptsPerIcon
 
     /// The subject IconForge derived last time. If the field still holds this,
     /// it is ours to replace on the next roll; if it differs, the user typed
@@ -378,6 +381,8 @@ final class GeneratorModel: ObservableObject {
                                            stamp: stamp,
                                            backend: chosenBackend,
                                            effort: chosenEffort,
+                                           timeout: timeoutSeconds,
+                                           attempts: max(1, attemptsPerIcon),
                                            isBatch: count > 1,
                                            finish: finish,
                                            bodySize: bodySize)
@@ -509,6 +514,7 @@ final class GeneratorModel: ObservableObject {
         let chosenFinish = finish
         let chosenBodySize = bodySize
         let chosenBackend = backend
+        let chosenTimeout = timeoutSeconds
         let chosenEffort = effort
         let styleVariant = style
         let paletteHint = palette.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -545,7 +551,7 @@ final class GeneratorModel: ObservableObject {
                                       model: modelName,
                                       prompt: instruction,
                                       workingDirectory: sessionDir,
-                                      timeout: Defaults.timeoutSeconds,
+                                      timeout: chosenTimeout,
                                       handle: runHandle)
                 }.value
 
@@ -643,6 +649,8 @@ final class GeneratorModel: ObservableObject {
         let stamp: String
         let backend: GeneratorBackend
         let effort: String
+        let timeout: Int
+        let attempts: Int
         let isBatch: Bool
         let finish: IconFinish
         let bodySize: IconBodySize
@@ -678,7 +686,7 @@ final class GeneratorModel: ObservableObject {
         // especially in a batch where a dud costs the user a whole slot.
         var lastOutput = ""
         var locatedImage: URL?
-        for attempt in 0..<Defaults.attemptsPerIcon {
+        for attempt in 0..<request.attempts {
             if handle.isCancelled { throw CancellationError() }
             let started = Date()
             lastOutput = try await Task.detached(priority: .userInitiated) {
@@ -688,7 +696,7 @@ final class GeneratorModel: ObservableObject {
                                   model: request.model,
                                   prompt: instruction,
                                   workingDirectory: sessionDir,
-                                  timeout: Defaults.timeoutSeconds,
+                                  timeout: request.timeout,
                                   handle: handle)
             }.value
 
