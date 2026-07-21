@@ -31,7 +31,7 @@ There is no Homebrew formula because this repo is not published anywhere. The in
 Fill in the name and a short description. Everything else is optional:
 
 - **Subject** is the object the icon shows. Leave it blank and IconForge asks the model to pick one, then writes its answer back into the field so you can edit it and reroll.
-- **Palette hint** goes into the prompt as a colour direction, like "sea glass to deep teal".
+- **Palette** opens a grid of the 50 most-liked [ColorHunt](https://colorhunt.co/palettes/popular) palettes. Pick one and its hex values go into the prompt verbatim, or ignore the grid and type a direction like "sea glass to deep teal" in the field below it.
 - **Style** nudges the render toward Standard, Playful, Minimal, or Glossy.
 - **Model** lists what `agy models` reports, minus the Claude entries. Refresh it with the button next to the picker. To change what gets filtered out, edit `excludedModelPrefixes` in `Sources/IconForge/AgyRunner.swift`.
 
@@ -53,7 +53,9 @@ Every run gets its own folder under `~/IconForge`, so nothing overwrites anythin
     meta.json           # inputs and model, for the gallery
 ```
 
-Change the folder in Settings, or use the Export button to copy a finished set somewhere else.
+Change the folder in Settings, or use the Export button to copy a finished set somewhere else. Clear empties the window without touching anything on disk.
+
+**Copy as agent prompt** puts an instruction on the clipboard that points a coding agent at these exact files and tells it to install the icon on whatever app you have open in that session, then rebuild and reinstall. Paste it and let the agent do the wiring.
 
 ## How the icon is built
 

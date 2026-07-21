@@ -23,20 +23,10 @@ struct ContentView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .sheet(isPresented: $showingSettings) { SettingsSheet() }
         .toolbar {
-            ToolbarItem(placement: .principal) {
-                // Fixed point sizes: the hammer glyph's bounding box is taller
-                // than its optical size, and at .headline it clips against the
-                // toolbar item's rounded background.
-                HStack(spacing: 6) {
-                    Image(systemName: "hammer.fill")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(LinearGradient(colors: [.orange, .pink],
-                                                        startPoint: .top, endPoint: .bottom))
-                    Text("IconForge")
-                        .font(.system(size: 13, weight: .semibold))
-                }
-                .padding(.vertical, 1)
-            }
+            // No principal item: the toolbar's own rounded background sizes to
+            // the text baseline, so any symbol placed there pokes out the top.
+            // The wordmark lives in the inspector header instead, where the
+            // layout is ours to control.
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     showingSettings = true
@@ -81,9 +71,8 @@ private struct InspectorPane: View {
                         .textFieldStyle(.roundedBorder)
                 }
 
-                FieldGroup(title: "Palette hint", symbol: "paintpalette", hint: "optional") {
-                    TextField("deep indigo to violet", text: $model.palette)
-                        .textFieldStyle(.roundedBorder)
+                FieldGroup(title: "Palette", symbol: "paintpalette", hint: "optional") {
+                    PaletteField()
                 }
 
                 FieldGroup(title: "Style", symbol: "wand.and.stars") {
@@ -130,6 +119,17 @@ private struct InspectorPane: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 7) {
+                Image(systemName: "hammer.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(LinearGradient(colors: [.orange, .pink],
+                                                    startPoint: .top, endPoint: .bottom))
+                Text("IconForge")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.bottom, 2)
+
             Text("Describe the app")
                 .font(.title3.weight(.semibold))
             Text("IconForge writes the prompt, calls agy, and masks the result into a real macOS icon.")
@@ -269,6 +269,112 @@ private struct InspectorPane: View {
     }
 }
 
+/// Palette control: a swatch button that opens the library, with a plain text
+/// field underneath for anyone who would rather describe the colours.
+private struct PaletteField: View {
+    @EnvironmentObject private var model: GeneratorModel
+    @State private var showingLibrary = false
+
+    private var selected: ColorPalette? { PaletteLibrary.matching(hint: model.palette) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Button {
+                showingLibrary = true
+            } label: {
+                HStack(spacing: 8) {
+                    if let selected {
+                        PaletteSwatch(palette: selected, height: 16)
+                            .frame(width: 76)
+                        Text("Palette \(selected.rank)")
+                    } else {
+                        Image(systemName: "swatchpalette")
+                            .foregroundStyle(.secondary)
+                        Text("Browse palettes")
+                    }
+                    Spacer(minLength: 4)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
+            }
+            // Inline rather than a popover or a sheet: anchored inside this
+            // scrolling inspector, a popover collapses to nothing and a sheet
+            // drags the window off-screen on macOS 14.
+            if showingLibrary {
+                PaletteLibraryView(selected: selected) { choice in
+                    model.palette = choice?.promptHint ?? ""
+                    showingLibrary = false
+                }
+            }
+
+            // Always mounted. Showing it only for custom hints meant the field
+            // was torn down the moment a palette was picked, and AppKit wrote
+            // its stale empty value back through the binding on the way out.
+            TextField("or describe it: deep indigo to violet", text: $model.palette)
+                .textFieldStyle(.roundedBorder)
+                .font(.callout)
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+    }
+}
+
+private struct PaletteLibraryView: View {
+    let selected: ColorPalette?
+    let choose: (ColorPalette?) -> Void
+
+    private let columns = [GridItem(.adaptive(minimum: 92), spacing: 8)]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Popular palettes")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Use none") { choose(nil) }
+                    .buttonStyle(.link)
+                    .font(.caption)
+                    .disabled(selected == nil)
+            }
+
+            ScrollView {
+                LazyVGrid(columns: columns, spacing: 8) {
+                    ForEach(PaletteLibrary.popular) { palette in
+                        Button {
+                            choose(palette)
+                        } label: {
+                            PaletteSwatch(palette: palette, height: 26, cornerRadius: 6)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                        .strokeBorder(Color.accentColor,
+                                                      lineWidth: palette == selected ? 2.5 : 0)
+                                )
+                                // The label is clipped to the pill, which leaves
+                                // the button with no hit region of its own.
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .help("Palette \(palette.rank): " + palette.hexes.map { "#\($0)" }.joined(separator: "  "))
+                    }
+                }
+                .padding(.bottom, 4)
+            }
+            .frame(height: 220)
+
+            Text("The chosen colours go into the prompt as exact hex values.")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Color(nsColor: .underPageBackgroundColor)))
+        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color(nsColor: .separatorColor)))
+    }
+}
+
 private struct FieldGroup<Content: View>: View {
     let title: String
     let symbol: String
@@ -313,7 +419,17 @@ private struct PreviewPane: View {
                     }
                     smallSizes
                     if let artifacts = model.artifacts {
-                        FileChips(artifacts: artifacts)
+                        VStack(spacing: 12) {
+                            FileChips(artifacts: artifacts)
+
+                            Button {
+                                model.copyInstallPrompt()
+                            } label: {
+                                Label("Copy as agent prompt", systemImage: "doc.on.clipboard")
+                            }
+                            .controlSize(.small)
+                            .help("Copies an instruction telling a coding agent to install this icon on the app you're working on")
+                        }
                     }
                 }
                 .padding(30)
@@ -358,7 +474,9 @@ private struct PreviewCard: View {
         VStack(spacing: 12) {
             ZStack {
                 RoundedRectangle(cornerRadius: 18, style: .continuous).fill(backdrop)
-                IconThumb(image: model.previewImage, side: 224)
+                IconThumb(image: model.previewImage,
+                          side: 224,
+                          placeholderTint: isLight ? .black.opacity(0.22) : .white.opacity(0.30))
                     .frame(width: 224, height: 224)
                     .opacity(model.phase.isBusy ? 0.35 : 1)
                     .overlay {
@@ -381,6 +499,9 @@ private struct PreviewCard: View {
 private struct IconThumb: View {
     let image: NSImage?
     let side: CGFloat
+    /// Placeholder ink. The preview cards set their own, since the app's dark
+    /// appearance would otherwise draw a pale outline onto the light card.
+    var placeholderTint: Color = Color(nsColor: .tertiaryLabelColor)
 
     var body: some View {
         if let image {
@@ -390,14 +511,14 @@ private struct IconThumb: View {
                 .aspectRatio(contentMode: .fit)
         } else {
             Squircle()
-                .stroke(Color(nsColor: .tertiaryLabelColor),
+                .stroke(placeholderTint,
                         style: StrokeStyle(lineWidth: max(1, side / 110), dash: [side / 22, side / 30]))
                 .padding(side * 0.1)
                 .overlay {
                     if side > 80 {
                         Image(systemName: "photo.on.rectangle.angled")
                             .font(.system(size: side * 0.18))
-                            .foregroundStyle(.quaternary)
+                            .foregroundStyle(placeholderTint.opacity(0.75))
                     }
                 }
         }

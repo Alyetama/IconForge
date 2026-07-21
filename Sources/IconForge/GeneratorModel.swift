@@ -287,10 +287,19 @@ final class GeneratorModel: ObservableObject {
             || style != .standard
     }
 
+    /// Hands first responder back to the window before the text-bound fields
+    /// are rewritten. Without this the open field editor commits whatever it
+    /// was holding on top of the new value, which shows up as stray characters
+    /// glued to the end of a restored app name.
+    private func endTextEditing() {
+        NSApp.keyWindow?.makeFirstResponder(nil)
+    }
+
     /// Empties the window: inputs, preview, and the last run's status. Files
     /// already on disk stay where they are, and so does the gallery.
     func clear() {
         guard !phase.isBusy else { return }
+        endTextEditing()
 
         appName = ""
         appDescription = ""
@@ -417,6 +426,7 @@ final class GeneratorModel: ObservableObject {
 
     /// Load a past run back into the preview and the input fields.
     func restore(_ entry: HistoryEntry) {
+        endTextEditing()
         previewImage = NSImage(contentsOf: entry.iconURL)
         artifacts = IconPipeline.Artifacts(sessionDir: entry.folder,
                                            rawPNG: entry.folder.appendingPathComponent("source_raw.png"),
@@ -448,6 +458,39 @@ final class GeneratorModel: ObservableObject {
         let base = outputDirectory
         try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
         NSWorkspace.shared.activateFileViewerSelecting([base])
+    }
+
+    /// Copies a ready-to-paste instruction for a coding agent: which files to
+    /// use, where they are, and what to do with them.
+    func copyInstallPrompt() {
+        guard let artifacts else { return }
+
+        let name = appName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let appLabel = name.isEmpty ? "the app" : name
+
+        let prompt = """
+        Set the icon below as the app icon for the macOS app we are working on in this session (\(appLabel)), then rebuild and reinstall it so the new icon shows up.
+
+        The icon is already generated. Use these files as they are, do not generate or redraw anything:
+
+          .icns (use this one):  \(artifacts.icns.path)
+          .iconset folder:       \(artifacts.iconsetDir.path)
+          1024 PNG (masked):     \(artifacts.maskedPNG.path)
+          raw 1024 PNG:          \(artifacts.rawPNG.path)
+          everything:            \(artifacts.sessionDir.path)
+
+        What to do:
+        1. Copy the .icns into the project where its icon lives. For a hand-built Swift Package app that is usually Resources/AppIcon.icns; for an Xcode project, import the .iconset contents into the AppIcon asset instead.
+        2. Make sure the bundle's Info.plist has CFBundleIconFile set to the icon's base name (AppIcon) and that the build step copies the .icns into Contents/Resources.
+        3. Rebuild the .app, re-sign it (codesign --force --sign - path/to/App.app), and reinstall it, replacing any copy already in /Applications.
+        4. If the Dock or Finder still shows the old icon, touch the bundle and restart the Dock to drop the cached version.
+
+        Tell me which files you changed and confirm the installed app is using the new icon.
+        """
+
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(prompt, forType: .string)
+        statusDetail = "Agent prompt copied to the clipboard"
     }
 
     func chooseOutputDirectory() {
