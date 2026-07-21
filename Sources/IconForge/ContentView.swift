@@ -50,12 +50,30 @@ private struct InspectorPane: View {
             VStack(alignment: .leading, spacing: 22) {
                 header
 
-                FieldGroup(title: "App name", symbol: "textformat") {
+                Picker("", selection: $model.isEditingMode) {
+                    Text("New icon").tag(false)
+                    Text("Edit this one").tag(true)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .disabled(model.artifacts == nil)
+
+                if model.isEditingMode {
+                    FieldGroup(title: "Change", symbol: "wand.and.rays",
+                               hint: "what to alter, in words") {
+                        TextField("make the bird bigger", text: $model.refineRequest)
+                            .textFieldStyle(.roundedBorder)
+                            .lineLimit(2...4)
+                            .onSubmit { model.refine() }
+                    }
+                }
+
+                FieldGroup(title: "App name", symbol: "textformat", enabled: !model.isEditingMode) {
                     TextField("Tidepool", text: $model.appName)
                         .textFieldStyle(.roundedBorder)
                 }
 
-                FieldGroup(title: "What it does", symbol: "text.alignleft") {
+                FieldGroup(title: "What it does", symbol: "text.alignleft", enabled: !model.isEditingMode) {
                     // A plain multiline TextField beats TextEditor here: it takes
                     // focus on the first click and carries its own placeholder.
                     TextField("tracks daily water intake",
@@ -66,12 +84,15 @@ private struct InspectorPane: View {
                 }
 
                 FieldGroup(title: "Subject", symbol: "circle.hexagonpath",
-                           hint: "optional — the model picks one") {
+                           hint: model.isEditingMode ? "kept as it is" : "optional — the model picks one",
+                           enabled: !model.isEditingMode) {
                     TextField("a water droplet", text: $model.subject)
                         .textFieldStyle(.roundedBorder)
                 }
 
-                FieldGroup(title: "Palette", symbol: "paintpalette", hint: "optional") {
+                FieldGroup(title: "Palette", symbol: "paintpalette",
+                           hint: model.isEditingMode ? "kept as it is" : "optional",
+                           enabled: !model.isEditingMode) {
                     PaletteField()
                 }
 
@@ -125,7 +146,9 @@ private struct InspectorPane: View {
                 }
 
                 FieldGroup(title: "Icons per run", symbol: "square.grid.2x2",
-                           hint: model.variantCount > 1 ? "pick one afterwards" : nil) {
+                           hint: model.isEditingMode ? "one at a time when editing"
+                                                     : (model.variantCount > 1 ? "pick one afterwards" : nil),
+                           enabled: !model.isEditingMode) {
                     Picker("", selection: $model.variantCount) {
                         ForEach(1...Defaults.maxVariants, id: \.self) { count in
                             Text("\(count)").tag(count)
@@ -187,6 +210,17 @@ private struct InspectorPane: View {
                         .frame(maxWidth: .infinity)
                 }
                 .controlSize(.large)
+            } else if model.isEditingMode {
+                Button {
+                    model.refine()
+                } label: {
+                    Label("Apply edit", systemImage: "wand.and.rays")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .disabled(!model.canRefine)
+                .keyboardShortcut(.return, modifiers: .command)
             } else {
                 Button {
                     model.generate()
@@ -433,6 +467,9 @@ private struct FieldGroup<Content: View>: View {
     let title: String
     let symbol: String
     var hint: String? = nil
+    /// Off means this input has no effect on what the button will do, so it is
+    /// dimmed and unclickable rather than silently ignored.
+    var enabled: Bool = true
     @ViewBuilder let content: Content
 
     var body: some View {
@@ -451,6 +488,8 @@ private struct FieldGroup<Content: View>: View {
             }
             content
         }
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.4)
     }
 }
 
@@ -486,8 +525,6 @@ private struct PreviewPane: View {
                             }
                             .controlSize(.small)
                             .help("Copies an instruction telling a coding agent to install this icon on the app you're working on")
-
-                            RefineBar()
                         }
                     }
                 }
@@ -589,30 +626,6 @@ private struct IconThumb: View {
                     }
                 }
         }
-    }
-}
-
-/// Sends the current icon back to the model with a change request.
-private struct RefineBar: View {
-    @EnvironmentObject private var model: GeneratorModel
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "wand.and.rays")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            TextField("change something: \"make the handle shorter\"", text: $model.refineRequest)
-                .textFieldStyle(.roundedBorder)
-                .font(.callout)
-                .frame(maxWidth: 340)
-                .onSubmit { model.refine() }
-
-            Button("Edit icon") { model.refine() }
-                .disabled(!model.canRefine)
-                .help("Redraws this icon with your change, keeping the original alongside it")
-        }
-        .padding(.top, 4)
     }
 }
 
@@ -730,10 +743,20 @@ private struct HistoryStrip: View {
                     .foregroundStyle(.tertiary)
                     .frame(height: 62, alignment: .leading)
             } else {
+                // Lazy, and only as many as the user has scrolled to: a folder
+                // with hundreds of runs would otherwise decode hundreds of PNGs
+                // before the window could draw.
                 ScrollView(.horizontal) {
-                    HStack(spacing: 12) {
-                        ForEach(model.history) { entry in
+                    LazyHStack(spacing: 12) {
+                        ForEach(model.history.prefix(model.historyWindow)) { entry in
                             HistoryTile(entry: entry)
+                        }
+
+                        if model.historyWindow < model.history.count {
+                            ProgressView()
+                                .controlSize(.small)
+                                .frame(width: 48, height: 48)
+                                .onAppear { model.growHistoryWindow() }
                         }
                     }
                     .padding(.bottom, 6)
@@ -749,19 +772,45 @@ private struct HistoryStrip: View {
     }
 }
 
+/// Decoded gallery thumbnails, kept between scrolls so a tile that comes back
+/// into view doesn't re-read its PNG.
+@MainActor
+final class ThumbnailCache: ObservableObject {
+    static let shared = ThumbnailCache()
+    private var images: [String: NSImage] = [:]
+
+    func image(for url: URL) -> NSImage? { images[url.path] }
+
+    /// Decodes off the main thread at tile size, never at 1024.
+    func load(_ url: URL) async -> NSImage? {
+        if let cached = images[url.path] { return cached }
+        let decoded = await Task.detached(priority: .utility) {
+            IconPipeline.thumbnail(at: url, maxPixel: 128)
+                .map { NSImage(cgImage: $0, size: NSSize(width: 48, height: 48)) }
+        }.value
+        if let decoded { images[url.path] = decoded }
+        return decoded
+    }
+}
+
 private struct HistoryTile: View {
     @EnvironmentObject private var model: GeneratorModel
     let entry: HistoryEntry
+    @State private var thumbnail: NSImage?
 
     var body: some View {
         Button {
             model.restore(entry)
         } label: {
             VStack(spacing: 4) {
-                if let image = entry.thumbnail {
+                if let image = thumbnail {
                     Image(nsImage: image)
                         .resizable()
                         .interpolation(.high)
+                        .frame(width: 48, height: 48)
+                } else {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Color(nsColor: .quaternaryLabelColor).opacity(0.35))
                         .frame(width: 48, height: 48)
                 }
                 Text(entry.title)
@@ -771,6 +820,7 @@ private struct HistoryTile: View {
             }
         }
         .buttonStyle(.plain)
+        .task { thumbnail = await ThumbnailCache.shared.load(entry.iconURL) }
         .help("\(entry.title) — \(entry.createdAt.formatted(date: .abbreviated, time: .shortened))")
         .contextMenu {
             Button("Reveal in Finder") {

@@ -10,8 +10,12 @@ enum Defaults {
     /// at no extra wall-clock cost.
     static let model = "gemini-3.1-pro-high"
     static let timeoutSeconds = 420
-    /// Newest N runs shown in the gallery strip.
-    static let historyLimit = 60
+    /// Newest N runs the gallery knows about. Only the visible window is
+    /// decoded, so this can be generous.
+    static let historyLimit = 500
+    /// Tiles rendered before the user scrolls, and how many more each time
+    /// they reach the end.
+    static let historyPageSize = 24
     /// Most icons one press of Generate can produce.
     static let maxVariants = 4
     /// Tries per icon before giving up on it.
@@ -51,9 +55,6 @@ struct HistoryEntry: Identifiable, Hashable {
     let title: String
     let createdAt: Date
     let metadata: RunMetadata?
-    /// Decoded once at scan time so the gallery doesn't re-read 1024px PNGs on
-    /// every SwiftUI render pass.
-    let thumbnail: NSImage?
 
     static func == (lhs: HistoryEntry, rhs: HistoryEntry) -> Bool { lhs.id == rhs.id }
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
@@ -127,6 +128,11 @@ final class GeneratorModel: ObservableObject {
     /// else in the window can put it away.
     @Published var showingPaletteLibrary = false
     @Published var refineRequest = ""
+    /// How many gallery tiles are currently rendered.
+    @Published private(set) var historyWindow = Defaults.historyPageSize
+    /// Editing an existing icon rather than generating a new one. The inputs
+    /// an edit can't act on are disabled while this is on.
+    @Published var isEditingMode = false
 
     /// Local polish pass. Changing it re-renders the current icon from the raw
     /// artwork, which takes milliseconds and never calls agy.
@@ -420,7 +426,8 @@ final class GeneratorModel: ObservableObject {
                 let rawURL = sessionDir.appendingPathComponent("source_raw.png")
                 let instruction = PromptBuilder.refineInstruction(sourcePath: source.path,
                                                                   outputPath: rawURL.path,
-                                                                  request: request)
+                                                                  request: request,
+                                                                  style: styleVariant)
                 try instruction.write(to: sessionDir.appendingPathComponent("prompt.txt"),
                                       atomically: true, encoding: .utf8)
 
@@ -653,6 +660,7 @@ final class GeneratorModel: ObservableObject {
         previewImage = nil
         variants = []
         selectedVariantID = nil
+        isEditingMode = false
         derivedSubject = ""
         subjectMemory = [:]
         refineRequest = ""
@@ -750,6 +758,13 @@ final class GeneratorModel: ObservableObject {
 
     // MARK: - History
 
+    /// Called when the last rendered tile appears, which means the user has
+    /// scrolled to the end of what is currently drawn.
+    func growHistoryWindow() {
+        guard historyWindow < history.count else { return }
+        historyWindow = min(historyWindow + Defaults.historyPageSize, history.count)
+    }
+
     func reloadHistory() {
         let base = outputDirectory
         let fm = FileManager.default
@@ -773,20 +788,17 @@ final class GeneratorModel: ObservableObject {
                     .flatMap { try? decoder.decode(RunMetadata.self, from: $0) }
                 let modified = (try? folder.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
 
-                let thumbnail = IconPipeline.thumbnail(at: icon, maxPixel: 128)
-                    .map { NSImage(cgImage: $0, size: NSSize(width: 48, height: 48)) }
-
                 return HistoryEntry(id: folder.path,
                                     folder: folder,
                                     iconURL: icon,
                                     title: metadata?.appName ?? folder.lastPathComponent,
                                     createdAt: metadata?.createdAt ?? modified,
-                                    metadata: metadata,
-                                    thumbnail: thumbnail)
+                                    metadata: metadata)
             }
             .sorted { $0.createdAt > $1.createdAt }
             .prefix(Defaults.historyLimit)
             .map { $0 }
+        historyWindow = min(Defaults.historyPageSize, history.count)
     }
 
     /// Load a past run back into the preview and the input fields.

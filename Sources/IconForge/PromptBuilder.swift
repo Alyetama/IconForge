@@ -234,13 +234,17 @@ enum PromptBuilder {
     /// Asks agy to edit an icon that already exists rather than draw a new one.
     static func refineInstruction(sourcePath: String,
                                   outputPath: String,
-                                  request: String) -> String {
-        """
+                                  request: String,
+                                  style: StyleVariant) -> String {
+        // The style directive rides along so picking one in edit mode does
+        // something; without it the edit would silently ignore the picker.
+        let styleNote = style.modifier.isEmpty ? "" : "\n\nHold to this look while you do it:\(style.modifier)"
+        return """
         Edit an existing image.
 
         Read the image at this path: \(sourcePath)
 
-        Keep the same subject, composition, camera angle and colour palette. Change only this: \(request)
+        Keep the same subject, composition, camera angle and colour palette. Change only this: \(request)\(styleNote)
 
         Everything else about the picture stays as it is. Keep it a single centred object on a smooth gradient background, filling the whole square and bleeding off all four straight edges. Do not add a rounded square, border, frame, text, letters or numbers.
 
