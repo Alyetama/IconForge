@@ -255,8 +255,8 @@ enum AgyRunner {
     /// Runs `agy --model <model> -p <prompt>` and returns everything it printed.
     /// Blocking — call it off the main thread.
     static func run(binary: URL,
-                    backend: GeneratorBackend = .agy,
-                    effort: String = "low",
+                    backend: GeneratorBackend,
+                    effort: String,
                     model: String,
                     prompt: String,
                     workingDirectory: URL,

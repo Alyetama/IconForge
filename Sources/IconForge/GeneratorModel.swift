@@ -683,6 +683,8 @@ final class GeneratorModel: ObservableObject {
             let started = Date()
             lastOutput = try await Task.detached(priority: .userInitiated) {
                 try AgyRunner.run(binary: request.binary,
+                                  backend: request.backend,
+                                  effort: request.effort,
                                   model: request.model,
                                   prompt: instruction,
                                   workingDirectory: sessionDir,
