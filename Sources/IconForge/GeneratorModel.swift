@@ -276,6 +276,36 @@ final class GeneratorModel: ObservableObject {
     /// regenerate re-rolls the artwork rather than the concept.
     func regenerate() { generate() }
 
+    var canClear: Bool {
+        guard !phase.isBusy else { return false }
+        return artifacts != nil
+            || errorMessage != nil
+            || !appName.isEmpty
+            || !appDescription.isEmpty
+            || !palette.isEmpty
+            || !subject.isEmpty
+            || style != .standard
+    }
+
+    /// Empties the window: inputs, preview, and the last run's status. Files
+    /// already on disk stay where they are, and so does the gallery.
+    func clear() {
+        guard !phase.isBusy else { return }
+
+        appName = ""
+        appDescription = ""
+        palette = ""
+        subject = ""
+        style = .standard
+
+        artifacts = nil
+        previewImage = nil
+        lastPrompt = ""
+        errorMessage = nil
+        statusDetail = ""
+        phase = .idle
+    }
+
     func cancel() {
         handle?.cancel()
         statusDetail = "Stopping…"

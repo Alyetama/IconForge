@@ -180,11 +180,22 @@ private struct InspectorPane: View {
                 .disabled(model.artifacts == nil)
             }
 
-            Button {
-                model.revealInFinder()
-            } label: {
-                Label("Reveal in Finder", systemImage: "folder")
-                    .frame(maxWidth: .infinity)
+            HStack(spacing: 10) {
+                Button {
+                    model.revealInFinder()
+                } label: {
+                    Label("Reveal", systemImage: "folder")
+                        .frame(maxWidth: .infinity)
+                }
+
+                Button {
+                    model.clear()
+                } label: {
+                    Label("Clear", systemImage: "eraser")
+                        .frame(maxWidth: .infinity)
+                }
+                .disabled(!model.canClear)
+                .help("Empty the fields and the preview. Past runs stay in the gallery.")
             }
         }
     }
