@@ -235,16 +235,24 @@ enum PromptBuilder {
     static func refineInstruction(sourcePath: String,
                                   outputPath: String,
                                   request: String,
-                                  style: StyleVariant) -> String {
+                                  style: StyleVariant,
+                                  recolourTo palette: String?) -> String {
         // The style directive rides along so picking one in edit mode does
         // something; without it the edit would silently ignore the picker.
         let styleNote = style.modifier.isEmpty ? "" : "\n\nHold to this look while you do it:\(style.modifier)"
+
+        // A recolour has to override the "keep the palette" line, or the two
+        // instructions contradict each other and the model picks one.
+        let keepLine = palette.map { new in
+            "Keep the same subject, composition and camera angle, but recolour it to use \(new). Repaint the background gradient and the object's colours in those colours, and keep the deepest tone at the bottom."
+        } ?? "Keep the same subject, composition, camera angle and colour palette."
+
         return """
         Edit an existing image.
 
         Read the image at this path: \(sourcePath)
 
-        Keep the same subject, composition, camera angle and colour palette. Change only this: \(request)\(styleNote)
+        \(keepLine) Change only this: \(request)\(styleNote)
 
         Everything else about the picture stays as it is. Keep it a single centred object on a smooth gradient background, filling the whole square and bleeding off all four straight edges. Do not add a rounded square, border, frame, text, letters or numbers.
 

@@ -130,9 +130,26 @@ final class GeneratorModel: ObservableObject {
     @Published var refineRequest = ""
     /// How many gallery tiles are currently rendered.
     @Published private(set) var historyWindow = Defaults.historyPageSize
-    /// Editing an existing icon rather than generating a new one. The inputs
-    /// an edit can't act on are disabled while this is on.
-    @Published var isEditingMode = false
+    /// Edit mode held on by the button in the edit bar, for changing the look
+    /// through the pickers without typing anything.
+    @Published var editModeOn = false
+    /// The palette the icon on screen was drawn with, so an edit can tell
+    /// whether you have since picked a different one.
+    @Published private(set) var appliedPalette = ""
+
+    /// True when the next action edits the icon on screen rather than drawing a
+    /// new one, either because something was typed or because the button is on.
+    var isEditPending: Bool {
+        guard artifacts != nil else { return false }
+        return editModeOn || !refineRequest.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    /// A palette picked since the current icon was drawn.
+    var pendingRecolour: String? {
+        let chosen = palette.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !chosen.isEmpty, chosen != appliedPalette.trimmingCharacters(in: .whitespacesAndNewlines) else { return nil }
+        return chosen
+    }
 
     /// Local polish pass. Changing it re-renders the current icon from the raw
     /// artwork, which takes milliseconds and never calls agy.
@@ -328,6 +345,7 @@ final class GeneratorModel: ObservableObject {
                     subject = first.subject
                 }
                 rememberSubjects(finished.map(\.subject), for: memoryKey)
+                appliedPalette = paletteHint
 
                 phase = .done
                 if finished.count == 1 && count == 1 {
@@ -389,7 +407,18 @@ final class GeneratorModel: ObservableObject {
     // MARK: - Refining
 
     var canRefine: Bool {
-        artifacts != nil && !phase.isBusy && !refineRequest.trimmingCharacters(in: .whitespaces).isEmpty
+        guard artifacts != nil, !phase.isBusy else { return false }
+        if !refineRequest.trimmingCharacters(in: .whitespaces).isEmpty { return true }
+        // Nothing typed: a new palette or a non-Standard style has to be
+        // carrying the change, otherwise there is no edit to make.
+        return editModeOn && (pendingRecolour != nil || !style.modifier.isEmpty)
+    }
+
+    /// What an empty edit bar means, depending on what was changed.
+    private var implicitRequest: String {
+        pendingRecolour != nil
+            ? "nothing else, the recolour above is the whole change"
+            : "restyle it to match the look described below, changing only the materials, surface finish and colour treatment"
     }
 
     /// Sends the icon back to the model with a change request, keeping the
@@ -397,7 +426,9 @@ final class GeneratorModel: ObservableObject {
     func refine() {
         guard canRefine, let current = artifacts else { return }
 
-        let request = refineRequest.trimmingCharacters(in: .whitespacesAndNewlines)
+        let typed = refineRequest.trimmingCharacters(in: .whitespacesAndNewlines)
+        let request = typed.isEmpty ? implicitRequest : typed
+        let recolour = pendingRecolour
         let source = current.rawPNG
         let name = appName.trimmingCharacters(in: .whitespacesAndNewlines)
         let currentSubject = subject.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -427,7 +458,8 @@ final class GeneratorModel: ObservableObject {
                 let instruction = PromptBuilder.refineInstruction(sourcePath: source.path,
                                                                   outputPath: rawURL.path,
                                                                   request: request,
-                                                                  style: styleVariant)
+                                                                  style: styleVariant,
+                                                                  recolourTo: recolour)
                 try instruction.write(to: sessionDir.appendingPathComponent("prompt.txt"),
                                       atomically: true, encoding: .utf8)
 
@@ -477,6 +509,8 @@ final class GeneratorModel: ObservableObject {
                 artifacts = rebuilt
                 previewImage = image
                 refineRequest = ""
+                editModeOn = false
+                appliedPalette = paletteHint
                 phase = .done
                 statusDetail = "Edit saved to \(rebuilt.sessionDir.lastPathComponent)"
                 handles = []
@@ -660,10 +694,11 @@ final class GeneratorModel: ObservableObject {
         previewImage = nil
         variants = []
         selectedVariantID = nil
-        isEditingMode = false
         derivedSubject = ""
         subjectMemory = [:]
         refineRequest = ""
+        editModeOn = false
+        appliedPalette = ""
         showingPaletteLibrary = false
         lastPrompt = ""
         errorMessage = nil
@@ -827,6 +862,7 @@ final class GeneratorModel: ObservableObject {
             appName = metadata.appName
             appDescription = metadata.description
             palette = metadata.palette
+            appliedPalette = metadata.palette
             subject = metadata.subject
             derivedSubject = metadata.subject
             style = metadata.style

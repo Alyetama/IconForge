@@ -50,30 +50,12 @@ private struct InspectorPane: View {
             VStack(alignment: .leading, spacing: 22) {
                 header
 
-                Picker("", selection: $model.isEditingMode) {
-                    Text("New icon").tag(false)
-                    Text("Edit this one").tag(true)
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .disabled(model.artifacts == nil)
-
-                if model.isEditingMode {
-                    FieldGroup(title: "Change", symbol: "wand.and.rays",
-                               hint: "what to alter, in words") {
-                        TextField("make the bird bigger", text: $model.refineRequest)
-                            .textFieldStyle(.roundedBorder)
-                            .lineLimit(2...4)
-                            .onSubmit { model.refine() }
-                    }
-                }
-
-                FieldGroup(title: "App name", symbol: "textformat", enabled: !model.isEditingMode) {
+                FieldGroup(title: "App name", symbol: "textformat", enabled: !model.isEditPending) {
                     TextField("Tidepool", text: $model.appName)
                         .textFieldStyle(.roundedBorder)
                 }
 
-                FieldGroup(title: "What it does", symbol: "text.alignleft", enabled: !model.isEditingMode) {
+                FieldGroup(title: "What it does", symbol: "text.alignleft", enabled: !model.isEditPending) {
                     // A plain multiline TextField beats TextEditor here: it takes
                     // focus on the first click and carries its own placeholder.
                     TextField("tracks daily water intake",
@@ -84,15 +66,16 @@ private struct InspectorPane: View {
                 }
 
                 FieldGroup(title: "Subject", symbol: "circle.hexagonpath",
-                           hint: model.isEditingMode ? "kept as it is" : "optional — the model picks one",
-                           enabled: !model.isEditingMode) {
+                           hint: model.isEditPending ? "kept as it is" : "optional — the model picks one",
+                           enabled: !model.isEditPending) {
                     TextField("a water droplet", text: $model.subject)
                         .textFieldStyle(.roundedBorder)
                 }
 
                 FieldGroup(title: "Palette", symbol: "paintpalette",
-                           hint: model.isEditingMode ? "kept as it is" : "optional",
-                           enabled: !model.isEditingMode) {
+                           hint: model.isEditPending
+                               ? (model.pendingRecolour == nil ? "pick one to recolour this icon" : "will recolour this icon")
+                               : "optional") {
                     PaletteField()
                 }
 
@@ -146,9 +129,7 @@ private struct InspectorPane: View {
                 }
 
                 FieldGroup(title: "Icons per run", symbol: "square.grid.2x2",
-                           hint: model.isEditingMode ? "one at a time when editing"
-                                                     : (model.variantCount > 1 ? "pick one afterwards" : nil),
-                           enabled: !model.isEditingMode) {
+                           hint: model.variantCount > 1 ? "pick one afterwards" : nil) {
                     Picker("", selection: $model.variantCount) {
                         ForEach(1...Defaults.maxVariants, id: \.self) { count in
                             Text("\(count)").tag(count)
@@ -210,11 +191,14 @@ private struct InspectorPane: View {
                         .frame(maxWidth: .infinity)
                 }
                 .controlSize(.large)
-            } else if model.isEditingMode {
+            } else if model.isEditPending {
+                // Edit mode owns the primary button too. Leaving it as Generate
+                // meant a click here quietly threw the icon away and drew a new
+                // one, which is not what the dimmed fields were promising.
                 Button {
                     model.refine()
                 } label: {
-                    Label("Apply edit", systemImage: "wand.and.rays")
+                    Label("Edit icon", systemImage: "wand.and.rays")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
@@ -525,6 +509,8 @@ private struct PreviewPane: View {
                             }
                             .controlSize(.small)
                             .help("Copies an instruction telling a coding agent to install this icon on the app you're working on")
+
+                            RefineBar()
                         }
                     }
                 }
@@ -549,7 +535,9 @@ private struct PreviewPane: View {
         HStack(spacing: 18) {
             ForEach([32, 16], id: \.self) { size in
                 VStack(spacing: 6) {
-                    IconThumb(image: model.previewImage, side: CGFloat(size))
+                    IconThumb(image: model.previewImage,
+                              side: CGFloat(size),
+                              roundsAtDisplayTime: model.bodySize == .fullBleed)
                         .frame(width: CGFloat(size), height: CGFloat(size))
                     Text("\(size)pt")
                         .font(.caption2)
@@ -580,7 +568,8 @@ private struct PreviewCard: View {
                 RoundedRectangle(cornerRadius: 18, style: .continuous).fill(backdrop)
                 IconThumb(image: model.previewImage,
                           side: 224,
-                          placeholderTint: isLight ? .black.opacity(0.22) : .white.opacity(0.30))
+                          placeholderTint: isLight ? .black.opacity(0.22) : .white.opacity(0.30),
+                          roundsAtDisplayTime: model.bodySize == .fullBleed)
                     .frame(width: 224, height: 224)
                     .opacity(model.phase.isBusy ? 0.35 : 1)
                     .overlay {
@@ -606,13 +595,28 @@ private struct IconThumb: View {
     /// Placeholder ink. The preview cards set their own, since the app's dark
     /// appearance would otherwise draw a pale outline onto the light card.
     var placeholderTint: Color = Color(nsColor: .tertiaryLabelColor)
+    /// Full bleed artwork is a plain square on purpose, because macOS rounds it
+    /// at display time. Showing the file as-is would preview something nobody
+    /// ever sees, so the preview stands in for the system mask.
+    var roundsAtDisplayTime: Bool = false
 
     var body: some View {
         if let image {
-            Image(nsImage: image)
+            let art = Image(nsImage: image)
                 .resizable()
                 .interpolation(.high)
                 .aspectRatio(contentMode: .fit)
+
+            if roundsAtDisplayTime {
+                art
+                    .clipShape(Squircle())
+                    .shadow(color: .black.opacity(0.28),
+                            radius: side * 0.045,
+                            y: side * 0.022)
+                    .padding(side * 0.08)
+            } else {
+                art
+            }
         } else {
             Squircle()
                 .stroke(placeholderTint,
@@ -626,6 +630,44 @@ private struct IconThumb: View {
                     }
                 }
         }
+    }
+}
+
+/// Sends the current icon back to the model with a change request. Typing here
+/// dims the inputs an edit keeps as they are, so it is obvious this refines the
+/// icon on screen rather than drawing a new one.
+private struct RefineBar: View {
+    @EnvironmentObject private var model: GeneratorModel
+
+    var body: some View {
+        HStack(spacing: 8) {
+            // Holds edit mode on with an empty bar, for changing the look
+            // through the pickers alone.
+            Button {
+                model.editModeOn.toggle()
+            } label: {
+                Image(systemName: model.editModeOn ? "wand.and.rays.inverse" : "wand.and.rays")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .tint(model.editModeOn ? .accentColor : nil)
+            .help(model.editModeOn
+                  ? "Edit mode is on: the pickers change this icon instead of the next one"
+                  : "Turn on edit mode to restyle this icon without typing")
+
+            TextField(model.editModeOn ? "optional: also say what to change"
+                                       : "change something: \"make the bird bigger\"",
+                      text: $model.refineRequest)
+                .textFieldStyle(.roundedBorder)
+                .font(.callout)
+                .frame(maxWidth: 340)
+                .onSubmit { model.refine() }
+
+            Button("Edit icon") { model.refine() }
+                .disabled(!model.canRefine)
+                .help("Redraws this icon with your change, keeping the original alongside it")
+        }
+        .padding(.top, 4)
     }
 }
 
@@ -653,6 +695,7 @@ private struct VariantPicker: View {
 }
 
 private struct VariantTile: View {
+    @EnvironmentObject private var model: GeneratorModel
     let variant: IconVariant
     let isSelected: Bool
     let select: () -> Void
@@ -660,12 +703,10 @@ private struct VariantTile: View {
     var body: some View {
         Button(action: select) {
             VStack(spacing: 5) {
-                if let image = variant.image {
-                    Image(nsImage: image)
-                        .resizable()
-                        .interpolation(.high)
-                        .frame(width: 64, height: 64)
-                }
+                IconThumb(image: variant.image,
+                          side: 64,
+                          roundsAtDisplayTime: model.bodySize == .fullBleed)
+                    .frame(width: 64, height: 64)
                 Text(variant.subject)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
