@@ -249,7 +249,8 @@ final class GeneratorModel: ObservableObject {
 
         Task {
             do {
-                let binary = try AgyRunner.resolveBinary(customPath: agyOverride)
+                let binary = try AgyRunner.resolveBinary(customPath: agyOverride,
+                                                         named: backend.binaryName)
                 let models = try await Task.detached(priority: .utility) {
                     try AgyRunner.listModels(binary: binary)
                 }.value
@@ -504,7 +505,7 @@ final class GeneratorModel: ObservableObject {
         let currentSubject = subject.trimmingCharacters(in: .whitespacesAndNewlines)
         let modelName = model
         let baseDir = outputDirectory
-        let agyOverride = agyPath
+        let agyOverride = binaryOverride(for: backend)
         let chosenFinish = finish
         let chosenBodySize = bodySize
         let chosenBackend = backend
