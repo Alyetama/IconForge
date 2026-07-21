@@ -219,9 +219,10 @@ final class GeneratorModel: ObservableObject {
     /// The picker's contents: whatever agy reported, plus the current choice if
     /// it isn't in that list (a hand-typed or since-removed model).
     var modelChoices: [String] {
-        if let fixed = backend.models {
-            return fixed.contains(model) ? fixed : [model] + fixed
-        }
+        // A backend with a fixed list shows exactly that list. Prepending the
+        // current id let a gemini model appear under codex whenever the saved
+        // setting outlived the backend it belonged to.
+        if let fixed = backend.models { return fixed }
         var choices = availableModels
         let excluded = AgyRunner.excludedModelPrefixes.contains { model.lowercased().hasPrefix($0) }
         if !model.isEmpty && !excluded && !choices.contains(model) { choices.insert(model, at: 0) }
@@ -232,6 +233,7 @@ final class GeneratorModel: ObservableObject {
     // MARK: - Model discovery
 
     func loadModels() {
+        normaliseModelForBackend()
         guard !isLoadingModels, backend.canListModels else { return }
 
         // A model saved before it was excluded would leave the picker with a
@@ -260,6 +262,14 @@ final class GeneratorModel: ObservableObject {
                 modelListError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             }
             isLoadingModels = false
+        }
+    }
+
+    /// Drops a model id that belongs to a different backend. Needed at launch
+    /// as well as on switch, since the stored id outlives the session.
+    private func normaliseModelForBackend() {
+        if let fixed = backend.models, !fixed.contains(model) {
+            model = backend.defaultModel
         }
     }
 
