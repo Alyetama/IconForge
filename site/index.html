@@ -114,6 +114,20 @@
 
   .caption { color: var(--dim); font-size: 13.5px; margin: 14px 0 0; }
 
+  .samples {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    margin-top: 34px;
+  }
+
+  .samples img {
+    width: 116px;
+    height: 116px;
+    border-radius: 26px;
+    box-shadow: 0 14px 34px rgba(0,0,0,0.5);
+  }
+
   section { padding: 62px 0; border-top: 1px solid var(--line); margin-top: 62px; }
 
   h2 {
@@ -251,6 +265,14 @@
     <img src="../docs/mockup.svg" alt="The IconForge window: input fields on the left, a generated icon previewed on light and dark backgrounds on the right">
   </div>
   <p class="caption">Preview on both desktops, plus 32pt and 16pt, because that is where icons usually fall apart.</p>
+
+  <div class="samples">
+    <img src="../docs/examples/dupefind.png" alt="DupeFind icon">
+    <img src="../docs/examples/mongo.png" alt="Mongo icon">
+    <img src="../docs/examples/tusk.png" alt="Tusk icon">
+    <img src="../docs/examples/iconforge.png" alt="IconForge icon">
+  </div>
+  <p class="caption">Four it made, unretouched. The last one is the app's own.</p>
 
   <section id="how">
     <h2>From prompt to icns</h2>
