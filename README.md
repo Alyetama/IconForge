@@ -8,8 +8,6 @@ Generate up to four at once and keep the one you like. If one is nearly right, s
 
 <img src="docs/mockup.svg" alt="IconForge window showing an icon preview on light and dark backgrounds" width="100%">
 
-Four it made, unretouched:
-
 <p>
   <img src="docs/examples/dupefind.png" width="104" alt="DupeFind: a snake on a green gradient">
   <img src="docs/examples/mongo.png" width="104" alt="Mongo: a leaf on an orange gradient">
