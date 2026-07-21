@@ -13,8 +13,8 @@ Four it made, unretouched:
 <p>
   <img src="docs/examples/dupefind.png" width="104" alt="DupeFind: a snake on a green gradient">
   <img src="docs/examples/mongo.png" width="104" alt="Mongo: a leaf on an orange gradient">
-  <img src="docs/examples/tusk.png" width="104" alt="Tusk: a dark cube">
-  <img src="docs/examples/iconforge.png" width="104" alt="IconForge: an anvil on an orange gradient">
+  <img src="docs/examples/tusk.png" width="104" alt="Tusk: a dark safe on a sunset gradient">
+  <img src="docs/examples/iconforge-full.png" width="104" alt="IconForge: a pale pigeon on a deep blue gradient">
 </p>
 
 ## What you need

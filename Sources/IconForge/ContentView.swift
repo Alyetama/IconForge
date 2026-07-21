@@ -209,7 +209,7 @@ private struct InspectorPane: View {
 
             Text("Describe the app")
                 .font(.title3.weight(.semibold))
-            Text("IconForge writes the prompt, calls agy, and masks the result into a real macOS icon.")
+            Text("IconForge writes the prompt, calls your generator, and masks the result into a real macOS icon.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
