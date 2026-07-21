@@ -731,6 +731,8 @@ private struct VariantTile: View {
 
 private struct FileChips: View {
     let artifacts: IconPipeline.Artifacts
+    /// Which chip was copied last, so its button can show a tick for a moment.
+    @State private var copied: String?
 
     private var files: [(String, String, URL)] {
         [("AppIcon.icns", "app.badge", artifacts.icns),
@@ -740,18 +742,38 @@ private struct FileChips: View {
     }
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 10) {
             ForEach(files, id: \.0) { name, symbol, url in
-                Button {
-                    NSWorkspace.shared.activateFileViewerSelecting([url])
-                } label: {
-                    Label(name, systemImage: symbol)
-                        .font(.caption)
+                HStack(spacing: 2) {
+                    Button {
+                        NSWorkspace.shared.activateFileViewerSelecting([url])
+                    } label: {
+                        Label(name, systemImage: symbol)
+                            .font(.caption)
+                    }
+                    .help("Show \(name) in Finder")
+
+                    Button {
+                        copy(url, name: name)
+                    } label: {
+                        Image(systemName: copied == name ? "checkmark" : "doc.on.doc")
+                            .font(.caption2)
+                    }
+                    .help("Copy the full path to \(name)")
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
-                .help(url.path)
             }
+        }
+    }
+
+    private func copy(_ url: URL, name: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(url.path, forType: .string)
+        copied = name
+        Task {
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            if copied == name { copied = nil }
         }
     }
 }
