@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IconForge — Type a sentence. Ship the icon.</title>
+<meta name="description" content="IconForge turns a sentence about your app into a finished macOS .icns: subject, prompt, render, squircle, edge light, every size Apple asks for.">
+<link rel="icon" href="examples/iconforge.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300..800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --sea:     #08131d;
+    --depth:   #0d1e2c;
+    --depth-2: #12283a;
+    --beak:    #ff4d42;
+    --beak-2:  #ff8a80;
+    --ice:     #eef6fc;
+    --mist:    #8fa9bd;
+    --reef:    #1e3547;
+    --sky:     #6cb4ee;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--sea);
+    color: var(--mist);
+    font: 400 1rem/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  ::selection { background: var(--beak); color: var(--ice); }
+
+  h1, h2, h3 {
+    font-family: "Bricolage Grotesque", -apple-system, sans-serif;
+    color: var(--ice);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+  }
+
+  a { color: var(--sky); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  a:focus-visible, button:focus-visible {
+    outline: 2px solid var(--beak);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+
+  code, pre, .mono {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+  }
+
+  .wrap {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  /* ---------- nav ---------- */
+
+  nav {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: color-mix(in srgb, var(--sea) 82%, transparent);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--reef);
+  }
+
+  nav .wrap {
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    height: 60px;
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: "Bricolage Grotesque", sans-serif;
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: var(--ice);
+    letter-spacing: -0.01em;
+  }
+
+  .brand:hover { text-decoration: none; }
+
+  .brand img {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    display: block;
+  }
+
+  nav .links {
+    display: flex;
+    gap: 22px;
+    margin-left: auto;
+    align-items: center;
+  }
+
+  nav .links a {
+    color: var(--mist);
+    font-size: 0.88rem;
+  }
+
+  nav .links a:hover { color: var(--ice); text-decoration: none; }
+
+  .gh-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid var(--reef);
+    border-radius: 8px;
+    padding: 6px 14px;
+    color: var(--ice) !important;
+    font-size: 0.85rem;
+    background: var(--depth);
+    transition: border-color 0.2s;
+  }
+
+  .gh-btn:hover { border-color: var(--beak); text-decoration: none; }
+
+  /* ---------- hero ---------- */
+
+  .hero {
+    position: relative;
+    padding: 110px 0 70px;
+    text-align: center;
+    overflow: clip;
+  }
+
+  .hero::before {
+    content: "";
+    position: absolute;
+    inset: -20% -30% auto;
+    height: 720px;
+    background: radial-gradient(ellipse 55% 60% at 50% 30%,
+      rgba(108, 180, 238, 0.20) 0%,
+      rgba(108, 180, 238, 0.05) 45%,
+      transparent 70%);
+    pointer-events: none;
+  }
+
+  .hero .wrap { position: relative; }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.78rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--beak);
+    margin-bottom: 26px;
+  }
+
+  .hero h1 {
+    font-size: clamp(2.6rem, 7vw, 4.6rem);
+    font-weight: 800;
+    max-width: 16ch;
+    margin: 0 auto 24px;
+  }
+
+  .hero h1 .mark {
+    display: inline-block;
+    width: 0.85em;
+    height: 0.85em;
+    border-radius: 22.37%;
+    vertical-align: -0.12em;
+    margin: 0 0.06em;
+    box-shadow: 0 6px 24px rgba(108, 180, 238, 0.45);
+  }
+
+  .hero p.lede {
+    max-width: 52ch;
+    margin: 0 auto 38px;
+    font-size: 1.12rem;
+  }
+
+  .cta-row {
+    display: flex;
+    gap: 14px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 78px;
+  }
+
+  .btn {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.9rem;
+    padding: 13px 26px;
+    border-radius: 10px;
+    border: 1px solid var(--reef);
+    color: var(--ice);
+    background: var(--depth);
+    cursor: pointer;
+    transition: transform 0.15s, border-color 0.2s, background 0.2s;
+  }
+
+  .btn:hover { text-decoration: none; border-color: var(--beak); }
+
+  .btn.primary {
+    background: var(--beak);
+    border-color: var(--beak);
+    color: var(--ice);
+    font-weight: 500;
+  }
+
+  .btn.primary:hover { background: var(--beak-2); }
+
+  /* mockup floats on the page, no frame — the svg has its own chrome */
+
+  .shot {
+    position: relative;
+    max-width: 880px;
+    margin: 0 auto;
+    perspective: 1600px;
+  }
+
+  .shot::before {
+    content: "";
+    position: absolute;
+    inset: 8% -6% -4%;
+    background: radial-gradient(ellipse 60% 55% at 50% 55%,
+      rgba(108, 180, 238, 0.16) 0%,
+      transparent 70%);
+    pointer-events: none;
+  }
+
+  .shot img {
+    position: relative;
+    display: block;
+    width: 100%;
+    border-radius: 16px;
+    box-shadow:
+      0 50px 100px rgba(0, 0, 0, 0.6),
+      0 12px 32px rgba(0, 0, 0, 0.45);
+    transform: rotateX(var(--tilt, 7deg));
+    transform-origin: center 120%;
+    will-change: transform;
+  }
+
+  /* ---------- sections ---------- */
+
+  section { padding: 96px 0; }
+
+  .sec-label {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--beak);
+    margin-bottom: 14px;
+  }
+
+  h2 {
+    font-size: clamp(1.7rem, 4vw, 2.5rem);
+    margin-bottom: 18px;
+  }
+
+  .sec-sub { max-width: 56ch; margin-bottom: 48px; }
+
+  /* ---------- gallery ---------- */
+
+  .gallery-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 22px;
+  }
+
+  .icon-card {
+    background: var(--depth);
+    border: 1px solid var(--reef);
+    border-radius: 14px;
+    padding: 22px;
+    text-align: center;
+    transition: transform 0.25s, border-color 0.25s;
+  }
+
+  .icon-card:hover {
+    transform: translateY(-5px);
+    border-color: rgba(255, 77, 66, 0.5);
+  }
+
+  .icon-card img {
+    width: 100%;
+    max-width: 132px;
+    border-radius: 22.37%;
+    display: block;
+    margin: 0 auto 16px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  }
+
+  .icon-card h3 { font-size: 1.02rem; margin-bottom: 5px; }
+
+  .icon-card p { font-size: 0.82rem; line-height: 1.5; }
+
+  .gallery-note {
+    margin-top: 26px;
+    font-size: 0.82rem;
+    color: #67809a;
+  }
+
+  /* ---------- mask lab ---------- */
+
+  .lab {
+    background: var(--depth);
+    border-top: 1px solid var(--reef);
+    border-bottom: 1px solid var(--reef);
+  }
+
+  .lab-flex {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 60px;
+    align-items: center;
+  }
+
+  .stage {
+    position: relative;
+    aspect-ratio: 1;
+    max-width: 380px;
+    margin: 0 auto;
+    width: 100%;
+    display: grid;
+    place-items: center;
+    background: repeating-conic-gradient(var(--depth-2) 0% 25%, #0a1826 0% 50%) 0 0 / 28px 28px;
+    border-radius: 18px;
+    border: 1px solid var(--reef);
+  }
+
+  .stage img {
+    width: var(--body, 80.5%);
+    border-radius: var(--corner, 22.37%);
+    box-shadow: var(--icon-shadow, 0 22px 10px rgba(0,0,0,0.28), 0 14px 34px rgba(0,0,0,0.5));
+    transition: width 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+                border-radius 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+                box-shadow 0.45s;
+    display: block;
+  }
+
+  .stage.fullbleed img {
+    --body: 100%;
+    --corner: 0%;
+    --icon-shadow: none;
+  }
+
+  .stage.large img { --body: 90.6%; }
+
+  .lab-controls {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin: 26px 0 20px;
+  }
+
+  .lab-controls button {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.8rem;
+    padding: 9px 16px;
+    border-radius: 999px;
+    border: 1px solid var(--reef);
+    background: transparent;
+    color: var(--mist);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .lab-controls button:hover { border-color: var(--beak); color: var(--ice); }
+
+  .lab-controls button[aria-pressed="true"] {
+    background: var(--beak);
+    border-color: var(--beak);
+    color: var(--ice);
+  }
+
+  .lab-readout {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.8rem;
+    color: var(--sky);
+    margin-bottom: 18px;
+  }
+
+  /* ---------- features ---------- */
+
+  .feat-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: var(--reef);
+    border: 1px solid var(--reef);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+
+  .feat {
+    background: var(--sea);
+    padding: 30px 26px;
+    transition: background 0.25s;
+  }
+
+  .feat:hover { background: var(--depth); }
+
+  .feat h3 {
+    font-size: 1.05rem;
+    margin-bottom: 9px;
+  }
+
+  .feat h3 .tag {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.68rem;
+    font-weight: 400;
+    color: var(--beak);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    display: block;
+    margin-bottom: 8px;
+  }
+
+  .feat p { font-size: 0.88rem; line-height: 1.6; }
+
+  /* ---------- pipeline ---------- */
+
+  .steps {
+    list-style: none;
+    counter-reset: step;
+    max-width: 720px;
+  }
+
+  .steps li {
+    counter-increment: step;
+    display: grid;
+    grid-template-columns: 64px 1fr;
+    gap: 22px;
+    padding: 26px 0;
+    border-bottom: 1px solid var(--reef);
+  }
+
+  .steps li:last-child { border-bottom: none; }
+
+  .steps li::before {
+    content: counter(step, decimal-leading-zero);
+    font-family: "Bricolage Grotesque", sans-serif;
+    font-size: 1.9rem;
+    font-weight: 300;
+    color: var(--beak);
+    line-height: 1.1;
+  }
+
+  .steps h3 { font-size: 1.08rem; margin-bottom: 6px; }
+
+  .steps p { font-size: 0.92rem; }
+
+  /* ---------- tree + install ---------- */
+
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 44px;
+    align-items: start;
+  }
+
+  .codeblock {
+    background: var(--depth);
+    border: 1px solid var(--reef);
+    border-radius: 12px;
+    padding: 22px 24px;
+    font-size: 0.8rem;
+    line-height: 1.7;
+    overflow-x: auto;
+    color: var(--mist);
+  }
+
+  .codeblock .c { color: #5f7890; }
+  .codeblock .f { color: var(--ice); }
+
+  .install-cmd {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    background: var(--depth);
+    border: 1px solid var(--reef);
+    border-radius: 12px;
+    padding: 18px 22px;
+    margin: 22px 0;
+  }
+
+  .install-cmd code {
+    color: var(--ice);
+    font-size: 1rem;
+  }
+
+  .install-cmd code::before {
+    content: "$ ";
+    color: var(--beak);
+  }
+
+  .copy-btn {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.75rem;
+    background: transparent;
+    border: 1px solid var(--reef);
+    color: var(--mist);
+    border-radius: 7px;
+    padding: 6px 12px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s;
+  }
+
+  .copy-btn:hover { border-color: var(--beak); color: var(--ice); }
+
+  .req-list {
+    list-style: none;
+    margin-top: 18px;
+  }
+
+  .req-list li {
+    padding: 12px 0 12px 26px;
+    position: relative;
+    border-bottom: 1px solid var(--reef);
+    font-size: 0.92rem;
+  }
+
+  .req-list li:last-child { border-bottom: none; }
+
+  .req-list li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 19px;
+    width: 9px;
+    height: 9px;
+    border-radius: 2.5px;
+    background: var(--beak);
+  }
+
+  .req-list code { color: var(--sky); font-size: 0.85em; }
+
+  /* ---------- footer ---------- */
+
+  footer {
+    border-top: 1px solid var(--reef);
+    padding: 44px 0 54px;
+  }
+
+  footer .wrap {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    flex-wrap: wrap;
+  }
+
+  footer img {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+  }
+
+  footer p { font-size: 0.85rem; }
+
+  footer .right { margin-left: auto; }
+
+  /* ---------- responsive ---------- */
+
+  @media (max-width: 860px) {
+    .gallery-grid { grid-template-columns: repeat(2, 1fr); }
+    .feat-grid { grid-template-columns: 1fr 1fr; }
+    .lab-flex, .two-col { grid-template-columns: 1fr; }
+    .stage { max-width: 320px; }
+    nav .links a:not(.gh-btn) { display: none; }
+  }
+
+  @media (max-width: 540px) {
+    .feat-grid { grid-template-columns: 1fr; }
+    section { padding: 64px 0; }
+    .hero { padding-top: 72px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <a class="brand" href="#top">
+      <img src="examples/iconforge.png" alt="IconForge icon: a white bird on a blue gradient">
+      IconForge
+    </a>
+    <div class="links">
+      <a href="#examples">Examples</a>
+      <a href="#mask-lab">Body sizes</a>
+      <a href="#features">Features</a>
+      <a href="#pipeline">Pipeline</a>
+      <a href="#install">Install</a>
+      <a class="gh-btn" href="https://github.com/fcatus/IconForge">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+        GitHub
+      </a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <div class="wrap">
+    <p class="eyebrow">macOS 14+ · agy or codex</p>
+    <h1>Type a sentence.<br>Ship the <img class="mark" src="examples/iconforge-full.png" alt=""> icon.</h1>
+    <p class="lede">
+      IconForge takes your app's name and what it does, works out what to draw,
+      renders it through the agentic CLI you already have, then cuts, masks and
+      lights it into a real <code>.icns</code> — every size Apple asks for.
+    </p>
+    <div class="cta-row">
+      <a class="btn primary" href="#install">./install.sh</a>
+      <a class="btn" href="https://github.com/fcatus/IconForge">View on GitHub</a>
+    </div>
+    <figure class="shot" id="shot">
+      <img src="mockup.svg" alt="The IconForge window showing an icon preview on light and dark backgrounds">
+    </figure>
+  </div>
+</header>
+
+<section id="examples">
+  <div class="wrap">
+    <p class="sec-label">Output</p>
+    <h2>Four it made, unretouched</h2>
+    <p class="sec-sub">
+      Each started as one line of text. No hand-fixing after the render.
+    </p>
+    <div class="gallery-grid">
+      <div class="icon-card">
+        <img src="examples/dupefind.png" alt="DupeFind icon: a snake on a green gradient">
+        <h3>DupeFind</h3>
+        <p>Duplicate-file finder. It chose the snake.</p>
+      </div>
+      <div class="icon-card">
+        <img src="examples/mongo.png" alt="Mongo icon: a leaf on an orange gradient">
+        <h3>Mongo</h3>
+        <p>Database browser. A leaf, on cue.</p>
+      </div>
+      <div class="icon-card">
+        <img src="examples/tusk.png" alt="Tusk icon: a dark cube on a sunset gradient">
+        <h3>Tusk</h3>
+        <p>Encrypted notes. Drew a locked safe.</p>
+      </div>
+      <div class="icon-card">
+        <img src="examples/iconforge.png" alt="IconForge icon: a white bird with a red beak on a blue gradient">
+        <h3>IconForge</h3>
+        <p>Its own icon. A white bird, red beak.</p>
+      </div>
+    </div>
+    <p class="gallery-note">Straight out of the app. The mask, edge light and shadow are Core Graphics, not the model.</p>
+  </div>
+</section>
+
+<section class="lab" id="mask-lab">
+  <div class="wrap">
+    <div class="lab-flex">
+      <div>
+        <p class="sec-label">The mask lab</p>
+        <h2>One icon, three bodies</h2>
+        <p>
+          macOS 26 wraps legacy icons in a system-drawn plate, and two masks
+          stacking reads as a white border. So body size is a real choice,
+          not a preference. Switch and watch the same artwork refit —
+          this is what the app does, live, in milliseconds.
+        </p>
+        <div class="lab-controls" role="group" aria-label="Body size">
+          <button data-mode="standard" aria-pressed="true">Apple standard</button>
+          <button data-mode="large" aria-pressed="false">Large</button>
+          <button data-mode="fullbleed" aria-pressed="false">Full bleed</button>
+        </div>
+        <p class="lab-readout" id="lab-readout">824 of 1024 px · squircle mask · shadow</p>
+        <p style="font-size:0.85rem;">
+          Full bleed is the default on macOS 26: no mask, no margin, no shadow.
+          The system supplies the only rounding.
+        </p>
+      </div>
+      <div class="stage" id="stage">
+        <img src="examples/iconforge-full.png" alt="The IconForge icon, refitting between body sizes">
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="features">
+  <div class="wrap">
+    <p class="sec-label">The app</p>
+    <h2>Built for the part everyone skips</h2>
+    <p class="sec-sub">
+      Generating a pretty picture is the easy half. IconForge does the
+      finishing work that makes it an icon.
+    </p>
+    <div class="feat-grid">
+      <div class="feat">
+        <h3><span class="tag">Batch</span>Four at once</h3>
+        <p>Each icon gets its own subject and art direction, rendered in parallel. Click the one that wins. If one call fails, the other three still land.</p>
+      </div>
+      <div class="feat">
+        <h3><span class="tag">Edit</span>Change it in plain words</h3>
+        <p>"Make the bird bigger." "Warmer background." The artwork goes back with instructions to keep everything else. The edit appears beside the original, not over it.</p>
+      </div>
+      <div class="feat">
+        <h3><span class="tag">Reroll</span>A new idea, not a redraw</h3>
+        <p>Reroll steers away from the half-dozen subjects it last tried for your app, so a second press is a different concept. Type your own subject and it sticks.</p>
+      </div>
+      <div class="feat">
+        <h3><span class="tag">Palette</span>192 trending palettes</h3>
+        <p>A grid of Coolors palettes whose hex values go into the prompt verbatim. Or ignore the grid and type a direction: "sea glass to deep teal."</p>
+      </div>
+      <div class="feat">
+        <h3><span class="tag">Finish</span>Five looks, free to try</h3>
+        <p>Flat, Apple edge, Glossy dome, Deep shadow, Punchy. Finishes are a local pass over the artwork — switching re-renders in milliseconds and never calls the model.</p>
+      </div>
+      <div class="feat">
+        <h3><span class="tag">Handoff</span>Copy as agent prompt</h3>
+        <p>One click puts an instruction on the clipboard that tells your coding agent where the files are and how to install the icon — Swift, Tauri, Electron, Flutter or web.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="pipeline">
+  <div class="wrap">
+    <p class="sec-label">Pipeline</p>
+    <h2>How the icon is built</h2>
+    <p class="sec-sub">
+      The prompt never says "app icon." It asks for a 3D render of one object
+      on a gradient. The rounding happens here.
+    </p>
+    <ol class="steps">
+      <li>
+        <div>
+          <h3>Normalise</h3>
+          <p>Centre-crop the raw artwork and redraw it at 1024×1024, whatever size came back.</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <h3>Finish</h3>
+          <p>Lay on the chosen finish: a lit top lip, a shaded base, a hairline inside the silhouette — clipped so nothing spills.</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <h3>Mask</h3>
+          <p>Unless the body is full bleed, clip a superellipse squircle and centre the body on a transparent canvas with a soft shadow beneath.</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <h3>Size</h3>
+          <p>Render all ten sizes from the 1024 master and let <code>iconutil</code> pack the <code>.iconset</code> into an <code>.icns</code>.</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <h3>Fallback</h3>
+          <p>Write a Windows <code>.ico</code> alongside, with PNG entries from 16 to 256 pixels.</p>
+        </div>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<section id="install">
+  <div class="wrap">
+    <p class="sec-label">Ship it</p>
+    <h2>Install</h2>
+    <div class="two-col">
+      <div>
+        <p>One script builds a release binary, wraps it in <code>IconForge.app</code>, ad-hoc signs it, and copies it to <code>/Applications</code>.</p>
+        <div class="install-cmd">
+          <code id="cmd">./install.sh</code>
+          <button class="copy-btn" id="copy-btn" type="button">copy</button>
+        </div>
+        <p style="font-size:0.88rem;">
+          No install? <code>./build_app.sh &amp;&amp; open build/IconForge.app</code>
+          runs the same bundle out of <code>build/</code>.
+        </p>
+      </div>
+      <div>
+        <ul class="req-list">
+          <li>macOS 14 or later</li>
+          <li><code>agy</code> or <code>codex</code> in your shell — one is enough, you pick in the app</li>
+          <li>Xcode command line tools, for <code>swift</code> and <code>iconutil</code></li>
+          <li>Nothing else. <code>sips</code> and <code>iconutil</code> ship with macOS</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <img src="examples/iconforge.png" alt="">
+    <p>IconForge — its own icon included, made with IconForge.</p>
+    <p class="right"><a href="https://github.com/fcatus/IconForge">github.com/fcatus/IconForge</a></p>
+  </div>
+</footer>
+
+<script>
+  // mockup tilt: settles flat as it scrolls into view
+  const shot = document.getElementById('shot');
+  const shotImg = shot.querySelector('img');
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!reduceMotion) {
+    let ticking = false;
+    const updateTilt = () => {
+      ticking = false;
+      const r = shot.getBoundingClientRect();
+      const vh = window.innerHeight;
+      const progress = Math.min(Math.max((vh - r.top) / (vh * 0.55), 0), 1);
+      shotImg.style.setProperty('--tilt', (7 * (1 - progress)).toFixed(2) + 'deg');
+    };
+    addEventListener('scroll', () => {
+      if (!ticking) { ticking = true; requestAnimationFrame(updateTilt); }
+    }, { passive: true });
+    updateTilt();
+  } else {
+    shotImg.style.setProperty('--tilt', '0deg');
+  }
+
+  // mask lab
+  const stage = document.getElementById('stage');
+  const readout = document.getElementById('lab-readout');
+  const notes = {
+    standard: '824 of 1024 px · squircle mask · shadow',
+    large: '928 of 1024 px · squircle mask · shadow',
+    fullbleed: 'plain 1024 square · no mask · macOS 26'
+  };
+  document.querySelectorAll('.lab-controls button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.lab-controls button').forEach(b =>
+        b.setAttribute('aria-pressed', b === btn ? 'true' : 'false'));
+      stage.className = 'stage ' + btn.dataset.mode;
+      readout.textContent = notes[btn.dataset.mode];
+    });
+  });
+
+  // copy install command
+  const copyBtn = document.getElementById('copy-btn');
+  copyBtn.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText('./install.sh');
+      copyBtn.textContent = 'copied';
+      setTimeout(() => copyBtn.textContent = 'copy', 1600);
+    } catch {
+      copyBtn.textContent = './install.sh';
+    }
+  });
+</script>
+
+</body>
+</html>
