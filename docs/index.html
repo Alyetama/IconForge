@@ -591,6 +591,96 @@
     html { scroll-behavior: auto; }
     *, *::before, *::after { transition: none !important; }
   }
+  /* download + the unsigned-app warning that gates it */
+
+  .dl-size {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.78rem;
+    opacity: 0.7;
+    margin-left: 8px;
+  }
+
+  .dl-card {
+    border: 1px solid var(--reef);
+    border-radius: 12px;
+    padding: 20px 22px;
+    background: var(--depth);
+    margin-bottom: 22px;
+  }
+
+  .dl-card h3 { font-size: 1.05rem; margin-bottom: 8px; }
+  .dl-card p { font-size: 0.9rem; margin-bottom: 14px; }
+
+  .dl-warn {
+    display: flex;
+    gap: 9px;
+    align-items: flex-start;
+    font-size: 0.84rem;
+    color: var(--beak-2);
+    margin-top: 14px;
+  }
+
+  .dl-warn svg { flex: none; margin-top: 2px; }
+
+  #gate {
+    width: min(540px, calc(100vw - 32px));
+    border: 1px solid var(--reef);
+    border-radius: 14px;
+    background: var(--depth);
+    color: var(--mist);
+    padding: 26px;
+  }
+
+  #gate::backdrop { background: rgba(3, 9, 14, 0.78); }
+
+  .gate-head {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 14px;
+  }
+
+  .gate-head h3 { font-size: 1.15rem; }
+
+  .gate-icon {
+    flex: none;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: var(--beak);
+    color: var(--ice);
+    font-weight: 700;
+    display: grid;
+    place-items: center;
+  }
+
+  #gate p { font-size: 0.9rem; margin-bottom: 12px; }
+  #gate ol { margin: 0 0 14px 20px; font-size: 0.9rem; }
+  #gate li { margin-bottom: 7px; }
+  #gate strong { color: var(--ice); font-weight: 600; }
+
+  #gate code {
+    background: var(--depth-2);
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 0.86em;
+  }
+
+  .gate-alt {
+    border-top: 1px solid var(--reef);
+    padding-top: 13px;
+    font-size: 0.85rem !important;
+  }
+
+  .gate-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    margin-top: 18px;
+  }
+
+  .gate-actions .btn { padding: 11px 20px; font-size: 0.85rem; }
 </style>
 </head>
 <body>
@@ -625,7 +715,8 @@
       lights it into a real <code>.icns</code> — every size Apple asks for.
     </p>
     <div class="cta-row">
-      <a class="btn primary" href="#install">./install.sh</a>
+      <a class="btn primary" href="IconForge.dmg" data-dmg>Download for macOS<span class="dl-size">1.4 MB</span></a>
+      <a class="btn" href="#install">./install.sh</a>
       <a class="btn" href="https://github.com/fcatus/IconForge">View on GitHub</a>
     </div>
     <figure class="shot" id="shot">
@@ -783,7 +874,16 @@
     <h2>Install</h2>
     <div class="two-col">
       <div>
-        <p>One script builds a release binary, wraps it in <code>IconForge.app</code>, ad-hoc signs it, and copies it to <code>/Applications</code>.</p>
+        <div class="dl-card">
+          <h3>Download the app</h3>
+          <p>A disk image with <code>IconForge.app</code> inside. Drag it to Applications and you are done.</p>
+          <a class="btn primary" href="IconForge.dmg" data-dmg>IconForge.dmg<span class="dl-size">1.4 MB</span></a>
+          <div class="dl-warn">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1.5 15 14H1L8 1.5Zm0 4a.75.75 0 0 0-.75.75v3a.75.75 0 0 0 1.5 0v-3A.75.75 0 0 0 8 5.5Zm0 6.5a.9.9 0 1 0 0-1.8.9.9 0 0 0 0 1.8Z"/></svg>
+            <span>Not signed with an Apple Developer ID, so macOS blocks it the first time. Getting past it takes one Control-click.</span>
+          </div>
+        </div>
+        <p>Or build it yourself. One script builds a release binary, wraps it in <code>IconForge.app</code>, ad-hoc signs it, and copies it to <code>/Applications</code>.</p>
         <div class="install-cmd">
           <code id="cmd">./install.sh</code>
           <button class="copy-btn" id="copy-btn" type="button">copy</button>
@@ -812,6 +912,32 @@
     <p class="right"><a href="https://github.com/fcatus/IconForge">github.com/fcatus/IconForge</a></p>
   </div>
 </footer>
+
+<dialog id="gate" aria-labelledby="gate-title">
+  <div class="gate-head">
+    <span class="gate-icon" aria-hidden="true">!</span>
+    <h3 id="gate-title">macOS will block this the first time</h3>
+  </div>
+  <p>
+    IconForge is ad-hoc signed, not notarised with an Apple Developer ID. Gatekeeper refuses
+    anything it cannot check, so on first launch macOS says IconForge
+    "cannot be opened because Apple cannot check it for malicious software."
+  </p>
+  <p>Nothing is wrong with the download. To get past it:</p>
+  <ol>
+    <li>Open the disk image and drag <strong>IconForge</strong> into <strong>Applications</strong>.</li>
+    <li>In Applications, <strong>Control-click</strong> IconForge and choose <strong>Open</strong>, then <strong>Open</strong> again when macOS asks.</li>
+    <li>If it refuses outright, go to <strong>System Settings &#9656; Privacy &amp; Security</strong>, scroll down to Security, and click <strong>Open Anyway</strong> next to the message about IconForge.</li>
+  </ol>
+  <p class="gate-alt">
+    Rather not? <code>./install.sh</code> builds it from source on your own machine,
+    which Gatekeeper never questions.
+  </p>
+  <div class="gate-actions">
+    <button class="btn" type="button" id="gate-cancel">Cancel</button>
+    <a class="btn primary" id="gate-go" href="IconForge.dmg" download>Download anyway</a>
+  </div>
+</dialog>
 
 <script>
   // mockup tilt: settles flat as it scrolls into view
@@ -852,6 +978,26 @@
     });
   });
 
+  // Nobody gets the dmg without seeing why macOS is about to refuse it.
+  const gate = document.getElementById('gate');
+  const supportsDialog = typeof gate.showModal === 'function';
+
+  document.querySelectorAll('[data-dmg]').forEach(link => {
+    link.addEventListener('click', event => {
+      if (!supportsDialog) return;   // no <dialog>: let the download just happen
+      event.preventDefault();
+      gate.showModal();
+    });
+  });
+
+  document.getElementById('gate-cancel').addEventListener('click', () => gate.close());
+  // Let the download start, then get out of the way.
+  document.getElementById('gate-go').addEventListener('click', () => setTimeout(() => gate.close(), 120));
+  // Clicking the backdrop, which lands on the dialog element itself.
+  gate.addEventListener('click', event => {
+    if (event.target === gate) gate.close();
+  });
+
   // copy install command
   const copyBtn = document.getElementById('copy-btn');
   copyBtn.addEventListener('click', async () => {
@@ -864,6 +1010,7 @@
     }
   });
 </script>
+
 
 </body>
 </html>

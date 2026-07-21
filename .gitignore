@@ -9,6 +9,8 @@ Package.resolved
 build/
 *.app
 *.dmg
+# except the one the website offers for download
+!docs/IconForge.dmg
 
 # Generated icon output (in case the output dir is pointed at the repo)
 Output/
