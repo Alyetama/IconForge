@@ -110,7 +110,10 @@ private struct InspectorPane: View {
                             }
                         }
                         .labelsHidden()
-                        .frame(maxWidth: .infinity)
+                        // A menu picker stretches and right-aligns its value,
+                        // which leaves a gap under the label. Hug the content
+                        // instead and let the row end in a spacer.
+                        .fixedSize()
 
                         // Greyed out for agy, whose model ids already carry
                         // their effort (…-low, …-high).
@@ -120,7 +123,7 @@ private struct InspectorPane: View {
                             }
                         }
                         .labelsHidden()
-                        .frame(width: 108)
+                        .fixedSize()
                         .disabled(!model.backend.supportsEffort)
                         .opacity(model.backend.supportsEffort ? 1 : 0.4)
                         .help(model.backend.supportsEffort
@@ -136,6 +139,8 @@ private struct InspectorPane: View {
                             .disabled(model.isLoadingModels)
                             .help("Re-read the list from `agy models`")
                         }
+
+                        Spacer(minLength: 0)
                     }
                 }
 
