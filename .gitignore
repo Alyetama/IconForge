@@ -1,0 +1,31 @@
+# Swift / SwiftPM
+.build/
+.swiftpm/
+Package.resolved
+*.o
+*.dSYM/
+
+# App bundle output
+build/
+*.app
+*.dmg
+
+# Generated icon output (in case the output dir is pointed at the repo)
+Output/
+*.iconset/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# macOS
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+
+# Editors
+.vscode/
+.idea/
+*.swp
