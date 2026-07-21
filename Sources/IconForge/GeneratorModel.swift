@@ -144,6 +144,16 @@ final class GeneratorModel: ObservableObject {
         return editModeOn || !refineRequest.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
+    /// What to show beside the Subject label. Typed text always wins, so the
+    /// hint reports what was last drawn rather than overwriting the field.
+    var subjectHint: String? {
+        if isEditPending { return "kept as it is" }
+        if !subject.contains(where: { $0.isLetter }) && !derivedSubject.isEmpty {
+            return "last drew \(derivedSubject)"
+        }
+        return subject.contains(where: { $0.isLetter }) ? "yours, kept on every roll" : "optional — the model picks one"
+    }
+
     /// A palette picked since the current icon was drawn.
     var pendingRecolour: String? {
         let chosen = palette.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -246,9 +256,11 @@ final class GeneratorModel: ObservableObject {
         let agyOverride = agyPath
         let count = max(1, min(Defaults.maxVariants, variantCount))
 
-        // Only a subject the user actually typed survives a reroll. One we
-        // derived is thrown away, so the next roll picks a different object.
-        let keepSubject = !typedSubject.isEmpty && typedSubject != derivedSubject
+        // If the field has something in it, it is the user's and it wins. The
+        // app never writes a derived subject back into the field, so equality
+        // with the last derived one can't be used to infer ownership: doing
+        // that made picking a variant silently disown a typed subject.
+        let keepSubject = typedSubject.contains(where: { $0.isLetter })
         let memoryKey = Self.subjectKey(appName: name, description: description)
         let avoid = Array((subjectMemory[memoryKey] ?? []).prefix(Defaults.rememberedSubjects))
 
@@ -285,7 +297,6 @@ final class GeneratorModel: ObservableObject {
                                                          workingDirectory: baseDir,
                                                          handle: runHandles[0])
                     derivedSubject = subjects[0]
-                    subject = subjects[0]
                 }
                 if runHandles.contains(where: { $0.isCancelled }) { throw CancellationError() }
 
@@ -342,7 +353,6 @@ final class GeneratorModel: ObservableObject {
                 lastPrompt = built.first?.2 ?? ""
                 if !keepSubject, let first = finished.first {
                     derivedSubject = first.subject
-                    subject = first.subject
                 }
                 rememberSubjects(finished.map(\.subject), for: memoryKey)
                 appliedPalette = paletteHint
@@ -535,11 +545,10 @@ final class GeneratorModel: ObservableObject {
             self.selectedVariantID = variant.id
             self.artifacts = variant.artifacts
             self.previewImage = variant.image
-            self.subject = variant.subject
             self.derivedSubject = variant.subject
             self.lastPrompt = (try? String(contentsOf: variant.artifacts.sessionDir.appendingPathComponent("prompt.txt"),
                                            encoding: .utf8)) ?? self.lastPrompt
-            self.statusDetail = "Using \(variant.artifacts.sessionDir.lastPathComponent)"
+            self.statusDetail = "Using \(variant.subject)"
         }
     }
 

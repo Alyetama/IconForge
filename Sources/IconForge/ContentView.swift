@@ -66,7 +66,7 @@ private struct InspectorPane: View {
                 }
 
                 FieldGroup(title: "Subject", symbol: "circle.hexagonpath",
-                           hint: model.isEditPending ? "kept as it is" : "optional — the model picks one",
+                           hint: model.subjectHint,
                            enabled: !model.isEditPending) {
                     TextField("a water droplet", text: $model.subject)
                         .textFieldStyle(.roundedBorder)

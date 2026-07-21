@@ -209,7 +209,9 @@ enum PromptBuilder {
 
         Colour: built from \(paletteClause). Put the deepest tone at the bottom of the background and a lighter tone toward the top, and keep the object's own colours clearly separated from the backdrop so the silhouette pops — a light object on a deeper background, or a deep object on a lighter background. Add a soft, subtle radial glow behind the object to lift it off the backdrop, and one short, soft contact shadow directly beneath it.
 
-        Composition: \(variation.composition) The whole object stays inside the central 70% of the canvas with even breathing room on all sides — the outer band and corners are pure background, because the image is cropped later. The silhouette must stay instantly readable at thumbnail size.
+        Composition: \(variation.composition) The whole object stays inside the central 70% of the canvas with even breathing room on all sides — the outer band and corners are pure background, because the image is cropped later. Give \(subject) as bold and readable a silhouette as that object naturally allows, so it still reads at thumbnail size, but do not substitute a different object to achieve it.
+
+        The one object in this picture is \(subject). Anyone looking at it should name that object immediately. If it is unusual or hard to draw, draw it anyway.
 
         Background: one smooth, immaculate gradient filling the entire 1024x1024 square and bleeding off all four edges — no noise, grain, banding, texture, vignetting or scenery.
 
