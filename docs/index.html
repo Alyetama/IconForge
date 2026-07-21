@@ -633,43 +633,55 @@
 
   #gate::backdrop { background: rgba(3, 9, 14, 0.78); }
 
-  .gate-head {
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    margin-bottom: 14px;
+  #gate h3 { font-size: 1.32rem; margin-bottom: 7px; }
+
+  .gate-why {
+    color: var(--mist);
+    font-size: 0.92rem;
+    margin-bottom: 18px;
   }
 
-  .gate-head h3 { font-size: 1.15rem; }
+  /* Numbered badges rather than list markers, so each step reads as a step. */
+  #gate ol {
+    margin: 0 0 18px;
+    padding-left: 0;
+    list-style: none;
+    counter-reset: step;
+  }
 
-  .gate-icon {
-    flex: none;
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    background: var(--beak);
+  #gate li {
+    counter-increment: step;
+    position: relative;
+    padding: 8px 0 8px 40px;
+    font-size: 0.95rem;
+  }
+
+  #gate li::before {
+    content: counter(step);
+    position: absolute;
+    left: 0;
+    top: 7px;
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    background: var(--depth-2);
+    border: 1px solid var(--reef);
     color: var(--ice);
-    font-weight: 700;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.8rem;
     display: grid;
     place-items: center;
   }
 
-  #gate p { font-size: 0.9rem; margin-bottom: 12px; }
-  #gate ol { margin: 0 0 14px 20px; font-size: 0.9rem; }
-  #gate li { margin-bottom: 7px; }
-  #gate strong { color: var(--ice); font-weight: 600; }
+  #gate li b { color: var(--ice); font-weight: 600; }
 
-  #gate code {
+  .pill {
     background: var(--depth-2);
-    padding: 1px 5px;
-    border-radius: 4px;
-    font-size: 0.86em;
-  }
-
-  .gate-alt {
-    border-top: 1px solid var(--reef);
-    padding-top: 13px;
-    font-size: 0.85rem !important;
+    border: 1px solid var(--reef);
+    border-radius: 6px;
+    padding: 0.05em 0.45em;
+    font-size: 0.9em;
+    white-space: nowrap;
   }
 
   .gate-actions {
@@ -677,7 +689,7 @@
     gap: 10px;
     justify-content: flex-end;
     flex-wrap: wrap;
-    margin-top: 18px;
+    margin-top: 4px;
   }
 
   .gate-actions .btn { padding: 11px 20px; font-size: 0.85rem; }
@@ -697,7 +709,7 @@
       <a href="#features">Features</a>
       <a href="#pipeline">Pipeline</a>
       <a href="#install">Install</a>
-      <a class="gh-btn" href="https://github.com/fcatus/IconForge">
+      <a class="gh-btn" href="https://github.com/Alyetama/IconForge">
         <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
         GitHub
       </a>
@@ -717,7 +729,7 @@
     <div class="cta-row">
       <a class="btn primary" href="IconForge.dmg" data-dmg>Download for macOS<span class="dl-size">1.4 MB</span></a>
       <a class="btn" href="#install">./install.sh</a>
-      <a class="btn" href="https://github.com/fcatus/IconForge">View on GitHub</a>
+      <a class="btn" href="https://github.com/Alyetama/IconForge">View on GitHub</a>
     </div>
     <figure class="shot" id="shot">
       <img src="mockup.svg" alt="The IconForge window showing an icon preview on light and dark backgrounds">
@@ -880,7 +892,7 @@
           <a class="btn primary" href="IconForge.dmg" data-dmg>IconForge.dmg<span class="dl-size">1.4 MB</span></a>
           <div class="dl-warn">
             <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1.5 15 14H1L8 1.5Zm0 4a.75.75 0 0 0-.75.75v3a.75.75 0 0 0 1.5 0v-3A.75.75 0 0 0 8 5.5Zm0 6.5a.9.9 0 1 0 0-1.8.9.9 0 0 0 0 1.8Z"/></svg>
-            <span>Not signed with an Apple Developer ID, so macOS blocks it the first time. Getting past it takes one Control-click.</span>
+            <span>Open-source and unsigned (no paid Apple Developer ID), so macOS blocks it on first launch. One-time fix: <b>Privacy &amp; Security</b> &#8250; <b>Open Anyway</b>.</span>
           </div>
         </div>
         <p>Or build it yourself. One script builds a release binary, wraps it in <code>IconForge.app</code>, ad-hoc signs it, and copies it to <code>/Applications</code>.</p>
@@ -909,33 +921,24 @@
   <div class="wrap">
     <img src="examples/iconforge.png" alt="">
     <p>IconForge — its own icon included, made with IconForge.</p>
-    <p class="right"><a href="https://github.com/fcatus/IconForge">github.com/fcatus/IconForge</a></p>
+    <p class="right"><a href="https://github.com/Alyetama/IconForge">github.com/Alyetama/IconForge</a></p>
   </div>
 </footer>
 
 <dialog id="gate" aria-labelledby="gate-title">
-  <div class="gate-head">
-    <span class="gate-icon" aria-hidden="true">!</span>
-    <h3 id="gate-title">macOS will block this the first time</h3>
-  </div>
-  <p>
-    IconForge is ad-hoc signed, not notarised with an Apple Developer ID. Gatekeeper refuses
-    anything it cannot check, so on first launch macOS says IconForge
-    "cannot be opened because Apple cannot check it for malicious software."
+  <h3 id="gate-title">Opening IconForge the first time</h3>
+  <p class="gate-why">
+    IconForge is open-source and ad-hoc signed (no paid Apple Developer ID), so macOS
+    blocks it on first launch. Here's the one-time fix:
   </p>
-  <p>Nothing is wrong with the download. To get past it:</p>
   <ol>
-    <li>Open the disk image and drag <strong>IconForge</strong> into <strong>Applications</strong>.</li>
-    <li>In Applications, <strong>Control-click</strong> IconForge and choose <strong>Open</strong>, then <strong>Open</strong> again when macOS asks.</li>
-    <li>If it refuses outright, go to <strong>System Settings &#9656; Privacy &amp; Security</strong>, scroll down to Security, and click <strong>Open Anyway</strong> next to the message about IconForge.</li>
+    <li>Open the downloaded <b>IconForge.dmg</b> and drag <b>IconForge</b> into <b>Applications</b>.</li>
+    <li>Open <b>IconForge</b> from Applications. macOS will say it "can't be opened", which is expected.</li>
+    <li>Go to <span class="pill">System Settings</span> &#8250; <span class="pill">Privacy &amp; Security</span>, scroll down, and click <b>Open Anyway</b> next to the message about IconForge.</li>
+    <li>Confirm with Touch ID or your password. IconForge opens, and macOS stops asking.</li>
   </ol>
-  <p class="gate-alt">
-    Rather not? <code>./install.sh</code> builds it from source on your own machine,
-    which Gatekeeper never questions.
-  </p>
   <div class="gate-actions">
-    <button class="btn" type="button" id="gate-cancel">Cancel</button>
-    <a class="btn primary" id="gate-go" href="IconForge.dmg" download>Download anyway</a>
+    <button class="btn" type="button" id="gate-ok">Got it</button>
   </div>
 </dialog>
 
@@ -978,21 +981,18 @@
     });
   });
 
-  // Nobody gets the dmg without seeing why macOS is about to refuse it.
+  // The download starts on click; this just explains what macOS is about to do.
+  // Blocking the download behind a confirm made a routine first launch feel
+  // like a security decision the visitor had to make.
   const gate = document.getElementById('gate');
-  const supportsDialog = typeof gate.showModal === 'function';
 
   document.querySelectorAll('[data-dmg]').forEach(link => {
-    link.addEventListener('click', event => {
-      if (!supportsDialog) return;   // no <dialog>: let the download just happen
-      event.preventDefault();
-      gate.showModal();
+    link.addEventListener('click', () => {
+      if (typeof gate.showModal === 'function') gate.showModal();
     });
   });
 
-  document.getElementById('gate-cancel').addEventListener('click', () => gate.close());
-  // Let the download start, then get out of the way.
-  document.getElementById('gate-go').addEventListener('click', () => setTimeout(() => gate.close(), 120));
+  document.getElementById('gate-ok').addEventListener('click', () => gate.close());
   // Clicking the backdrop, which lands on the dialog element itself.
   gate.addEventListener('click', event => {
     if (event.target === gate) gate.close();

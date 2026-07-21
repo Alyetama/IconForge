@@ -27,15 +27,22 @@ Four it made, unretouched:
 
 ## Install
 
+1. Download **[IconForge.dmg](https://alyetama.github.io/IconForge/IconForge.dmg)** and open it.
+2. Drag **IconForge** into **Applications** and launch it.
+
+> [!IMPORTANT]
+> **On first launch, macOS will block IconForge**, because it is open-source and unsigned (no paid Apple Developer ID). One-time fix:
+> open **System Settings → Privacy & Security**, scroll down, and click **Open Anyway** next to the message about IconForge, then confirm.
+
+Or build it yourself, which skips the block entirely:
+
 ```bash
 ./install.sh
 ```
 
-That builds a release binary, wraps it in `IconForge.app`, ad-hoc signs it, and copies it to `/Applications`. Launch it from Spotlight afterwards.
+That builds a release binary, wraps it in `IconForge.app`, ad-hoc signs it, and copies it to `/Applications`.
 
-To run it without installing, `./build_app.sh && open build/IconForge.app` uses the same bundle out of `build/`.
-
-There is no Homebrew formula, since this repo is not published anywhere. Use the install script.
+To run it without installing, `./build_app.sh && open build/IconForge.app` uses the same bundle out of `build/`. To rebuild the disk image, `./make_dmg.sh`.
 
 ## Using it
 

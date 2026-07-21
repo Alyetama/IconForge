@@ -5,7 +5,7 @@
     <key>CFBundleName</key><string>IconForge</string>
     <key>CFBundleDisplayName</key><string>IconForge</string>
     <key>CFBundleExecutable</key><string>IconForge</string>
-    <key>CFBundleIdentifier</key><string>com.fcatus.iconforge</string>
+    <key>CFBundleIdentifier</key><string>com.alyetama.iconforge</string>
     <key>CFBundleVersion</key><string>1.0.0</string>
     <key>CFBundleShortVersionString</key><string>1.0.0</string>
     <key>CFBundlePackageType</key><string>APPL</string>
