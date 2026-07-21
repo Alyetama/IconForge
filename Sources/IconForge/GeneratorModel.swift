@@ -36,8 +36,8 @@ struct RunMetadata: Codable {
 struct IconVariant: Identifiable {
     let id = UUID()
     let subject: String
-    let artifacts: IconPipeline.Artifacts
-    let image: NSImage?
+    var artifacts: IconPipeline.Artifacts
+    var image: NSImage?
 }
 
 /// One past generation, as read back off disk.
@@ -119,6 +119,20 @@ final class GeneratorModel: ObservableObject {
     @Published private(set) var lastPrompt = ""
     @Published private(set) var variants: [IconVariant] = []
     @Published private(set) var selectedVariantID: UUID?
+    /// Whether the palette grid is open. It lives here so a click anywhere
+    /// else in the window can put it away.
+    @Published var showingPaletteLibrary = false
+    @Published var refineRequest = ""
+
+    /// Local polish pass. Changing it re-renders the current icon from the raw
+    /// artwork, which takes milliseconds and never calls agy.
+    @Published var finish: IconFinish = IconFinish(rawValue: UserDefaults.standard.string(forKey: "finish") ?? "") ?? .appleEdge {
+        didSet {
+            guard finish != oldValue else { return }
+            UserDefaults.standard.set(finish.rawValue, forKey: "finish")
+            reapplyFinish()
+        }
+    }
 
     // Model discovery
     @Published private(set) var availableModels: [String] = []
@@ -208,6 +222,7 @@ final class GeneratorModel: ObservableObject {
         artifacts = nil
         variants = []
         selectedVariantID = nil
+        showingPaletteLibrary = false
         phase = .derivingSubject
         statusDetail = "Checking that agy is reachable…"
 
@@ -254,7 +269,8 @@ final class GeneratorModel: ObservableObject {
                                            style: styleVariant,
                                            baseDir: baseDir,
                                            stamp: stamp,
-                                           isBatch: count > 1)
+                                           isBatch: count > 1,
+                                           finish: finish)
 
                 var built: [(Int, IconVariant, String)] = []
                 try await withThrowingTaskGroup(of: (Int, IconVariant, String)?.self) { group in
@@ -319,6 +335,140 @@ final class GeneratorModel: ObservableObject {
     /// is a different idea rather than the same object drawn again.
     func regenerate() { generate() }
 
+    /// Re-runs the local part of the pipeline with the current finish. The raw
+    /// artwork is untouched, so this is reversible and free.
+    func reapplyFinish() {
+        guard let current = artifacts, !phase.isBusy else { return }
+        let chosen = finish
+        let raw = current.rawPNG
+        let dir = current.sessionDir
+        guard FileManager.default.fileExists(atPath: raw.path) else { return }
+
+        Task {
+            do {
+                let rebuilt = try await Task.detached(priority: .userInitiated) {
+                    try IconPipeline.process(rawImage: raw, into: dir, finish: chosen)
+                }.value
+                let image = NSImage(contentsOf: rebuilt.maskedPNG)
+                artifacts = rebuilt
+                previewImage = image
+                if let index = variants.firstIndex(where: { $0.artifacts.sessionDir == dir }) {
+                    variants[index].artifacts = rebuilt
+                    variants[index].image = image
+                }
+                statusDetail = "\(chosen.rawValue) finish applied"
+                reloadHistory()
+            } catch {
+                errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            }
+        }
+    }
+
+    // MARK: - Refining
+
+    var canRefine: Bool {
+        artifacts != nil && !phase.isBusy && !refineRequest.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    /// Sends the icon back to the model with a change request, keeping the
+    /// original untouched and adding the result alongside it.
+    func refine() {
+        guard canRefine, let current = artifacts else { return }
+
+        let request = refineRequest.trimmingCharacters(in: .whitespacesAndNewlines)
+        let source = current.rawPNG
+        let name = appName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let currentSubject = subject.trimmingCharacters(in: .whitespacesAndNewlines)
+        let modelName = model
+        let baseDir = outputDirectory
+        let agyOverride = agyPath
+        let chosenFinish = finish
+        let styleVariant = style
+        let paletteHint = palette.trimmingCharacters(in: .whitespacesAndNewlines)
+        let runHandle = AgyProcessHandle()
+        handles = [runHandle]
+
+        errorMessage = nil
+        phase = .generatingArtwork
+        statusDetail = "Applying your edit…"
+
+        Task {
+            do {
+                let binary = try AgyRunner.resolveBinary(customPath: agyOverride)
+                let sessionDir = try Self.makeSessionDirectory(base: baseDir,
+                                                               appName: name.isEmpty ? "icon" : name,
+                                                               stamp: Self.timestamp(),
+                                                               suffix: "-edit")
+
+                let rawURL = sessionDir.appendingPathComponent("source_raw.png")
+                let instruction = PromptBuilder.refineInstruction(sourcePath: source.path,
+                                                                  outputPath: rawURL.path,
+                                                                  request: request)
+                try instruction.write(to: sessionDir.appendingPathComponent("prompt.txt"),
+                                      atomically: true, encoding: .utf8)
+
+                let started = Date()
+                let output = try await Task.detached(priority: .userInitiated) {
+                    try AgyRunner.run(binary: binary,
+                                      model: modelName,
+                                      prompt: instruction,
+                                      workingDirectory: sessionDir,
+                                      timeout: Defaults.timeoutSeconds,
+                                      handle: runHandle)
+                }.value
+
+                guard let produced = AgyRunner.locateImage(expected: rawURL,
+                                                           output: output,
+                                                           sessionDir: sessionDir,
+                                                           after: started) else {
+                    try? FileManager.default.removeItem(at: sessionDir)
+                    throw AgyError.noImageProduced(output: output)
+                }
+                if produced != rawURL {
+                    try? FileManager.default.removeItem(at: rawURL)
+                    try FileManager.default.copyItem(at: produced, to: rawURL)
+                }
+
+                phase = .masking
+                let rebuilt = try await Task.detached(priority: .userInitiated) {
+                    try IconPipeline.process(rawImage: rawURL, into: sessionDir, finish: chosenFinish)
+                }.value
+
+                let metadata = RunMetadata(appName: name,
+                                           description: appDescription,
+                                           subject: currentSubject.isEmpty ? request : currentSubject,
+                                           palette: paletteHint,
+                                           style: styleVariant,
+                                           model: modelName,
+                                           createdAt: Date())
+                Self.writeMetadata(metadata, to: sessionDir)
+
+                let image = NSImage(contentsOf: rebuilt.maskedPNG)
+                let edited = IconVariant(subject: currentSubject.isEmpty ? "edited" : currentSubject,
+                                         artifacts: rebuilt,
+                                         image: image)
+                variants.append(edited)
+                selectedVariantID = edited.id
+                artifacts = rebuilt
+                previewImage = image
+                refineRequest = ""
+                phase = .done
+                statusDetail = "Edit saved to \(rebuilt.sessionDir.lastPathComponent)"
+                handles = []
+                reloadHistory()
+            } catch is CancellationError {
+                phase = .done
+                statusDetail = "Cancelled"
+                handles = []
+            } catch {
+                phase = .failed
+                statusDetail = ""
+                errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                handles = []
+            }
+        }
+    }
+
     /// Promote one of the batch to the main preview.
     func select(_ variant: IconVariant) {
         applyAfterEditing { [weak self] in
@@ -354,6 +504,7 @@ final class GeneratorModel: ObservableObject {
         let baseDir: URL
         let stamp: String
         let isBatch: Bool
+        let finish: IconFinish
     }
 
     /// Generates and post-processes one icon. Returns its index, the finished
@@ -420,7 +571,7 @@ final class GeneratorModel: ObservableObject {
         }
 
         let artifacts = try await Task.detached(priority: .userInitiated) {
-            try IconPipeline.process(rawImage: rawURL, into: sessionDir)
+            try IconPipeline.process(rawImage: rawURL, into: sessionDir, finish: request.finish)
         }.value
 
         let metadata = RunMetadata(appName: request.appName,
@@ -481,6 +632,8 @@ final class GeneratorModel: ObservableObject {
         selectedVariantID = nil
         derivedSubject = ""
         recentSubjects = []
+        refineRequest = ""
+        showingPaletteLibrary = false
         lastPrompt = ""
         errorMessage = nil
         statusDetail = ""

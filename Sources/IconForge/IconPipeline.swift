@@ -1,4 +1,5 @@
 import CoreGraphics
+import CoreImage
 import Foundation
 import ImageIO
 import UniformTypeIdentifiers
@@ -82,10 +83,13 @@ enum IconPipeline {
     }
 
     /// Full post-process: raw artwork in, complete icon set out.
-    static func process(rawImage rawURL: URL, into sessionDir: URL) throws -> Artifacts {
-        let source = try normalize(try loadImage(at: rawURL))
-        let body = try maskBody(from: source)
-        let masked = try composite(body: body)
+    static func process(rawImage rawURL: URL,
+                        into sessionDir: URL,
+                        finish: IconFinish = .appleEdge) throws -> Artifacts {
+        var source = try normalize(try loadImage(at: rawURL))
+        if finish == .punchy { source = try enrich(source) }
+        let body = try applyFinish(finish, to: try maskBody(from: source))
+        let masked = try composite(body: body, finish: finish)
 
         let maskedURL = sessionDir.appendingPathComponent("icon_1024.png")
         try writePNG(masked, to: maskedURL)
@@ -202,15 +206,106 @@ enum IconPipeline {
         return out
     }
 
+    // MARK: Finishes
+
+    /// The edge treatment that separates a system icon from a flat picture in a
+    /// rounded box: a lit top lip, a shaded base, and a hairline inside the
+    /// silhouette. All of it is clipped to the squircle, so nothing spills.
+    static func applyFinish(_ finish: IconFinish, to body: CGImage) throws -> CGImage {
+        guard finish != .flat else { return body }
+
+        let size = CGFloat(body.width)
+        let ctx = try makeContext(size: body.width)
+        let rect = CGRect(x: 0, y: 0, width: size, height: size)
+        ctx.draw(body, in: rect)
+
+        let path = squirclePath(in: rect)
+        ctx.saveGState()
+        ctx.addPath(path)
+        ctx.clip()
+
+        guard let space = CGColorSpace(name: CGColorSpace.sRGB) else { throw IconPipelineError.contextFailure }
+
+        // Lit top lip.
+        if let top = CGGradient(colorsSpace: space,
+                                colors: [CGColor(red: 1, green: 1, blue: 1, alpha: 0.34),
+                                         CGColor(red: 1, green: 1, blue: 1, alpha: 0)] as CFArray,
+                                locations: [0, 1]) {
+            ctx.drawLinearGradient(top,
+                                   start: CGPoint(x: 0, y: size),
+                                   end: CGPoint(x: 0, y: size * 0.80),
+                                   options: [])
+        }
+
+        // Shaded base.
+        if let bottom = CGGradient(colorsSpace: space,
+                                   colors: [CGColor(red: 0, green: 0, blue: 0, alpha: 0.22),
+                                            CGColor(red: 0, green: 0, blue: 0, alpha: 0)] as CFArray,
+                                   locations: [0, 1]) {
+            ctx.drawLinearGradient(bottom,
+                                   start: CGPoint(x: 0, y: 0),
+                                   end: CGPoint(x: 0, y: size * 0.24),
+                                   options: [])
+        }
+
+        if finish == .glossyDome {
+            // A wide, shallow highlight sitting over the top half.
+            let dome = CGRect(x: -size * 0.25, y: size * 0.42,
+                              width: size * 1.5, height: size * 0.95)
+            ctx.saveGState()
+            ctx.addEllipse(in: dome)
+            ctx.clip()
+            if let sheen = CGGradient(colorsSpace: space,
+                                      colors: [CGColor(red: 1, green: 1, blue: 1, alpha: 0.22),
+                                               CGColor(red: 1, green: 1, blue: 1, alpha: 0)] as CFArray,
+                                      locations: [0, 1]) {
+                ctx.drawLinearGradient(sheen,
+                                       start: CGPoint(x: 0, y: size),
+                                       end: CGPoint(x: 0, y: size * 0.5),
+                                       options: [])
+            }
+            ctx.restoreGState()
+        }
+
+        // Hairline just inside the silhouette. The stroke straddles the path and
+        // the clip removes its outer half, which is exactly the inner edge.
+        ctx.addPath(path)
+        ctx.setStrokeColor(CGColor(red: 1, green: 1, blue: 1, alpha: 0.30))
+        ctx.setLineWidth(size * 0.006)
+        ctx.strokePath()
+
+        ctx.restoreGState()
+
+        guard let out = ctx.makeImage() else { throw IconPipelineError.contextFailure }
+        return out
+    }
+
+    /// Slightly richer colour for the punchy finish.
+    static func enrich(_ image: CGImage) throws -> CGImage {
+        let input = CIImage(cgImage: image)
+        guard let filter = CIFilter(name: "CIColorControls") else { return image }
+        filter.setValue(input, forKey: kCIInputImageKey)
+        filter.setValue(1.18, forKey: kCIInputSaturationKey)
+        filter.setValue(1.05, forKey: kCIInputContrastKey)
+        guard let output = filter.outputImage,
+              let rendered = CIContext().createCGImage(output, from: input.extent) else { return image }
+        return rendered
+    }
+
     /// Body centred on the transparent canvas with a soft shadow beneath it.
-    static func composite(body: CGImage) throws -> CGImage {
+    static func composite(body: CGImage, finish: IconFinish = .appleEdge) throws -> CGImage {
         let size = Int(IconGeometry.canvas)
         let ctx = try makeContext(size: size)
         let inset = (IconGeometry.canvas - IconGeometry.bodySize) / 2
 
-        let shadow = CGColor(red: 0, green: 0, blue: 0, alpha: IconGeometry.shadowOpacity)
-        ctx.setShadow(offset: CGSize(width: 0, height: -IconGeometry.shadowOffsetDown),
-                      blur: IconGeometry.shadowBlur,
+        let deep = finish == .deepShadow
+        let opacity = deep ? 0.38 : IconGeometry.shadowOpacity
+        let blur = deep ? IconGeometry.shadowBlur * 1.5 : IconGeometry.shadowBlur
+        let drop = deep ? IconGeometry.shadowOffsetDown * 1.6 : IconGeometry.shadowOffsetDown
+
+        let shadow = CGColor(red: 0, green: 0, blue: 0, alpha: opacity)
+        ctx.setShadow(offset: CGSize(width: 0, height: -drop),
+                      blur: blur,
                       color: shadow)
         ctx.draw(body, in: CGRect(x: inset, y: inset,
                                   width: IconGeometry.bodySize, height: IconGeometry.bodySize))

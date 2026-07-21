@@ -7,19 +7,78 @@ enum StyleVariant: String, CaseIterable, Identifiable, Codable {
     case playful = "Playful"
     case minimal = "Minimal"
     case glossy = "Glossy"
+    case technical = "Technical"
+    case editorial = "Editorial"
+    case retro = "Retro"
+    case luxe = "Luxe"
+    case organic = "Organic"
+    case neon = "Neon"
 
     var id: String { rawValue }
 
-    var modifier: String {
+    var blurb: String {
+        switch self {
+        case .standard: return "Straight Apple house style"
+        case .playful: return "Consumer app, friendly and bouncy"
+        case .minimal: return "Stripped back, utility-like"
+        case .glossy: return "Polished, premium consumer feel"
+        case .technical: return "Developer tool, precise and engineered"
+        case .editorial: return "Writing and reading, paper and ink"
+        case .retro: return "Warm vintage hardware"
+        case .luxe: return "Finance or pro tool, expensive materials"
+        case .organic: return "Health and nature, soft and tactile"
+        case .neon: return "Media and creative, lit from within"
+        }
+    }
+
+    /// The style clause names the app's own purpose so the look and the
+    /// function argue for the same thing instead of pulling apart.
+    func modifier(purpose: String) -> String {
+        let job = purpose.isEmpty ? "this app" : "an app that \(purpose)"
         switch self {
         case .standard:
             return ""
         case .playful:
-            return " Push it playful: rounder, chunkier proportions, a little squash and bounce in the form, warmer saturated colour."
+            return " Aim it at \(job) as a friendly consumer app: rounder, chunkier proportions, a little squash and bounce in the form, warm saturated colour."
         case .minimal:
-            return " Push it minimal: reduce the subject to its simplest readable silhouette, flatter shading, almost no surface detail."
+            return " Aim it at \(job) as a quiet utility: the simplest readable silhouette, flat even shading, almost no surface detail, restrained colour."
         case .glossy:
-            return " Push it glossy: a polished, slightly reflective surface with one crisp specular highlight and deeper contrast."
+            return " Aim it at \(job) as a premium consumer app: a polished, slightly reflective surface, one crisp specular highlight, deeper contrast."
+        case .technical:
+            return " Aim it at \(job) as a precise, engineered developer tool: crisp geometry, machined edges, subtle brushed-metal or fine-grid detail, cool restrained colour."
+        case .editorial:
+            return " Aim it at \(job) as a writing or reading tool: paper and ink materials, soft matte stock, a printed feel, warm neutral colour with one accent."
+        case .retro:
+            return " Aim it at \(job) as a piece of warm vintage hardware: slightly worn plastic or enamel, rounded 1970s industrial forms, muted period colour."
+        case .luxe:
+            return " Aim it at \(job) as an expensive professional tool: dense materials like anodised metal, glass and deep matte lacquer, restrained palette, one quiet metallic accent."
+        case .organic:
+            return " Aim it at \(job) as something soft and natural: tactile matte surfaces, gentle asymmetry, hand-shaped forms, fresh natural colour."
+        case .neon:
+            return " Aim it at \(job) as a bold creative or media app: the subject lit from within, glowing accents against a deep background, strong colour contrast, no scattering haze."
+        }
+    }
+}
+
+/// Post-processing finishes applied to the masked body after the artwork comes
+/// back. These are local Core Graphics passes, so switching between them is
+/// instant and costs nothing.
+enum IconFinish: String, CaseIterable, Identifiable, Codable {
+    case flat = "Flat"
+    case appleEdge = "Apple edge"
+    case glossyDome = "Glossy dome"
+    case deepShadow = "Deep shadow"
+    case punchy = "Punchy"
+
+    var id: String { rawValue }
+
+    var blurb: String {
+        switch self {
+        case .flat: return "The artwork exactly as generated"
+        case .appleEdge: return "Lit top edge and shaded base, the way system icons catch light"
+        case .glossyDome: return "Apple edge plus a soft dome highlight over the top half"
+        case .deepShadow: return "Apple edge with a heavier, further drop shadow"
+        case .punchy: return "Apple edge with richer colour and a touch more contrast"
         }
     }
 }
@@ -92,7 +151,7 @@ enum PromptBuilder {
 
         Subject: \(subject). One single object, nothing else in the picture.
 
-        Style: the current Apple macOS icon look, the family Notes, Reminders, Podcasts and Maps belong to. A smooth, softly three-dimensional object with generously rounded edges and corners and a \(variation.material) surface. \(variation.angle). Lit from above by one broad soft studio light: gentle highlights along the upper edges, soft shading underneath, no harsh speculars and no rim lighting. Confident and simplified — bold primary forms, very little surface detail, nothing fiddly or ornamental.\(style.modifier)
+        Style: the current Apple macOS icon look, the family Notes, Reminders, Podcasts and Maps belong to. A smooth, softly three-dimensional object with generously rounded edges and corners and a \(variation.material) surface. \(variation.angle). Lit from above by one broad soft studio light: gentle highlights along the upper edges, soft shading underneath, no harsh speculars and no rim lighting. Confident and simplified — bold primary forms, very little surface detail, nothing fiddly or ornamental.\(style.modifier(purpose: description))
 
         Composition: \(variation.composition). The silhouette has to stay obvious at 16 pixels, so keep the shape chunky and clearly separated from the background, with even breathing room on all four sides.
 
@@ -113,6 +172,25 @@ enum PromptBuilder {
         \(imagePrompt)
 
         Save the generated image as a PNG to this exact absolute path: \(outputPath)
+        Do not save it anywhere else and do not ask any follow-up questions.
+        When the file is written, print only that absolute path and nothing else.
+        """
+    }
+
+    /// Asks agy to edit an icon that already exists rather than draw a new one.
+    static func refineInstruction(sourcePath: String,
+                                  outputPath: String,
+                                  request: String) -> String {
+        """
+        Edit an existing image.
+
+        Read the image at this path: \(sourcePath)
+
+        Keep the same subject, composition, camera angle and colour palette. Change only this: \(request)
+
+        Everything else about the picture stays as it is. Keep it a single centred object on a smooth gradient background, filling the whole square and bleeding off all four straight edges. Do not add a rounded square, border, frame, text, letters or numbers.
+
+        Save the edited image as a PNG at exactly 1024x1024 to this absolute path: \(outputPath)
         Do not save it anywhere else and do not ask any follow-up questions.
         When the file is written, print only that absolute path and nothing else.
         """

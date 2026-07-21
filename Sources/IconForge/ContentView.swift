@@ -75,13 +75,13 @@ private struct InspectorPane: View {
                     PaletteField()
                 }
 
-                FieldGroup(title: "Style", symbol: "wand.and.stars") {
+                FieldGroup(title: "Style", symbol: "wand.and.stars",
+                           hint: model.style.blurb) {
                     Picker("", selection: $model.style) {
                         ForEach(StyleVariant.allCases) { variant in
                             Text(variant.rawValue).tag(variant)
                         }
                     }
-                    .pickerStyle(.segmented)
                     .labelsHidden()
                 }
 
@@ -105,6 +105,15 @@ private struct InspectorPane: View {
                     }
                 }
 
+                FieldGroup(title: "Finish", symbol: "sparkle", hint: model.finish.blurb) {
+                    Picker("", selection: $model.finish) {
+                        ForEach(IconFinish.allCases) { option in
+                            Text(option.rawValue).tag(option)
+                        }
+                    }
+                    .labelsHidden()
+                }
+
                 FieldGroup(title: "Icons per run", symbol: "square.grid.2x2",
                            hint: model.variantCount > 1 ? "pick one afterwards" : nil) {
                     Picker("", selection: $model.variantCount) {
@@ -124,8 +133,16 @@ private struct InspectorPane: View {
                 }
             }
             .padding(20)
+            .padding(.bottom, 24)
         }
         .background(.background.secondary)
+        // Clicking the panel's empty space puts the palette grid away. Controls
+        // sit above this, so they still get their own clicks.
+        .background(
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture { model.showingPaletteLibrary = false }
+        )
     }
 
     private var header: some View {
@@ -284,14 +301,13 @@ private struct InspectorPane: View {
 /// field underneath for anyone who would rather describe the colours.
 private struct PaletteField: View {
     @EnvironmentObject private var model: GeneratorModel
-    @State private var showingLibrary = false
 
     private var selected: ColorPalette? { PaletteLibrary.matching(hint: model.palette) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Button {
-                showingLibrary = true
+                model.showingPaletteLibrary.toggle()
             } label: {
                 HStack(spacing: 8) {
                     if let selected {
@@ -315,11 +331,12 @@ private struct PaletteField: View {
             // Inline rather than a popover or a sheet: anchored inside this
             // scrolling inspector, a popover collapses to nothing and a sheet
             // drags the window off-screen on macOS 14.
-            if showingLibrary {
+            if model.showingPaletteLibrary {
                 PaletteLibraryView(selected: selected) { choice in
                     model.palette = choice?.promptHint ?? ""
-                    showingLibrary = false
+                    model.showingPaletteLibrary = false
                 }
+                .onExitCommand { model.showingPaletteLibrary = false }
             }
 
             // Always mounted. Showing it only for custom hints meant the field
@@ -434,11 +451,9 @@ private struct PreviewPane: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ZStack {
-                LinearGradient(colors: [Color(nsColor: .windowBackgroundColor),
-                                        Color(nsColor: .underPageBackgroundColor)],
-                               startPoint: .top, endPoint: .bottom)
-
+            // Scrolls, so a short window shortens the preview instead of
+            // pushing the gallery off the bottom edge.
+            ScrollView {
                 VStack(spacing: 26) {
                     HStack(spacing: 26) {
                         PreviewCard(isLight: true)
@@ -461,12 +476,22 @@ private struct PreviewPane: View {
                             }
                             .controlSize(.small)
                             .help("Copies an instruction telling a coding agent to install this icon on the app you're working on")
+
+                            RefineBar()
                         }
                     }
                 }
                 .padding(30)
+                .frame(maxWidth: .infinity)
             }
+            .background(
+                LinearGradient(colors: [Color(nsColor: .windowBackgroundColor),
+                                        Color(nsColor: .underPageBackgroundColor)],
+                               startPoint: .top, endPoint: .bottom)
+            )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .onTapGesture { model.showingPaletteLibrary = false }
 
             Divider()
             HistoryStrip()
@@ -554,6 +579,30 @@ private struct IconThumb: View {
                     }
                 }
         }
+    }
+}
+
+/// Sends the current icon back to the model with a change request.
+private struct RefineBar: View {
+    @EnvironmentObject private var model: GeneratorModel
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "wand.and.rays")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            TextField("change something: \"make the handle shorter\"", text: $model.refineRequest)
+                .textFieldStyle(.roundedBorder)
+                .font(.callout)
+                .frame(maxWidth: 340)
+                .onSubmit { model.refine() }
+
+            Button("Edit icon") { model.refine() }
+                .disabled(!model.canRefine)
+                .help("Redraws this icon with your change, keeping the original alongside it")
+        }
+        .padding(.top, 4)
     }
 }
 
@@ -671,19 +720,20 @@ private struct HistoryStrip: View {
                     .foregroundStyle(.tertiary)
                     .frame(height: 62, alignment: .leading)
             } else {
-                ScrollView(.horizontal, showsIndicators: false) {
+                ScrollView(.horizontal) {
                     HStack(spacing: 12) {
                         ForEach(model.history) { entry in
                             HistoryTile(entry: entry)
                         }
                     }
-                    .padding(.bottom, 4)
+                    .padding(.bottom, 6)
                 }
-                .frame(height: 78)
+                .frame(height: 92)
             }
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.top, 10)
+        .padding(.bottom, 14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.bar)
     }
