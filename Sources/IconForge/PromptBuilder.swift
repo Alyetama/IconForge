@@ -202,27 +202,53 @@ enum PromptBuilder {
                                description: String,
                                count: Int,
                                avoiding used: [String]) -> String {
+        // Deliberately a preference, not a ban. A hard "never suggest these"
+        // pushes the model off the obvious fitting object and into tangents,
+        // which is worse than repeating an idea.
         let avoidClause = used.isEmpty
             ? ""
-            : "\n\nDo not suggest any of these, or anything close to them: \(used.joined(separator: "; "))."
+            : """
+
+
+            These have already been used for this app, so prefer something else if an equally \
+            fitting object exists: \(used.joined(separator: "; ")). \
+            If the best object for the app is still one of those, a close variation of it is fine. \
+            Never pick a worse-fitting object just to be different.
+            """
 
         let quantity = count == 1
-            ? "Name one object"
-            : "Name \(count) genuinely different objects, one per line, no numbering or bullets"
+            ? "Name the single best object"
+            : "Name the \(count) best objects, one per line, no numbering or bullets"
 
         return """
         An app called "\(appName)" does this: \(description)
 
-        \(quantity) that could each represent it on an app icon.
+        \(quantity) to put on that app's icon.
 
-        Each one must be a single physical object with a simple, chunky silhouette that still reads at 16 pixels. \
-        No scenes, no arrangements of several things, no abstract shapes, no text, no screens showing content. \
-        Prefer everyday objects with a strong recognisable outline.
+        The object has to be something the app literally works with, acts on, or produces. \
+        Someone who sees the icon without the name should be able to guess roughly what the app does. \
+        Relevance to "\(description)" matters more than originality.
 
-        Reply with the objects only, lowercase, 2 to 5 words each, no punctuation and no explanation. \
+        Each object must also work as an icon: one physical thing, a simple chunky silhouette that \
+        still reads at 16 pixels, no scenes, no abstract shapes, no text, no screens showing content. \
+        One thing only, never two combined: "an envelope with a clock on it" is two things and is wrong, \
+        "an envelope" is right.
+
+        Reply with the objects only, lowercase, 2 to 5 words each, no punctuation, no preamble and \
+        no explanation. Do not write anything except the objects themselves. \
         Example replies: "a paper airplane", "a brass compass", "a stack of coins".\(avoidClause)
         """
     }
+
+    /// Words that mean the model is talking to us rather than naming an object.
+    /// Without this, a stray "sure here are four ideas" passes every other
+    /// check and becomes the subject of an icon.
+    private static let chatterWords: Set<String> = [
+        "sure", "here", "heres", "okay", "ok", "certainly", "option", "options",
+        "idea", "ideas", "object", "objects", "icon", "icons", "app", "apps",
+        "suggestion", "suggestions", "note", "reply", "answer", "represent",
+        "representing", "these", "below", "following", "choice", "choices",
+    ]
 
     /// Pulls usable subjects out of whatever agy printed.
     static func cleanSubjects(_ raw: String, count: Int) -> [String] {
@@ -237,10 +263,16 @@ enum PromptBuilder {
                                                        options: .regularExpression)
             candidate = candidate.trimmingCharacters(in: CharacterSet(charactersIn: "\"'`.*_ "))
 
+            let words = candidate.lowercased()
+                .split(whereSeparator: { !$0.isLetter })
+                .map(String.init)
+
             guard !candidate.isEmpty,
                   candidate.count <= 60,
-                  candidate.split(separator: " ").count <= 8,
+                  words.count >= 1,
+                  words.count <= 6,
                   !candidate.contains(":"),
+                  !words.contains(where: { chatterWords.contains($0) }),
                   seen.insert(candidate.lowercased()).inserted else { continue }
 
             results.append(candidate)

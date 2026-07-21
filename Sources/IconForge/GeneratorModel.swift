@@ -14,7 +14,7 @@ enum Defaults {
     /// Tries per icon before giving up on it.
     static let attemptsPerIcon = 2
     /// How many past subjects to steer away from on the next roll.
-    static let rememberedSubjects = 12
+    static let rememberedSubjects = 6
 
     static var outputDirectory: URL {
         FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(outputFolderName, isDirectory: true)
@@ -105,9 +105,10 @@ final class GeneratorModel: ObservableObject {
     /// it is ours to replace on the next roll; if it differs, the user typed
     /// something and we leave it alone.
     @Published private(set) var derivedSubject = ""
-    /// Recently used subjects, so consecutive rolls stop landing on the same
-    /// object. This is the main reason a reroll used to look like the last one.
-    @Published private(set) var recentSubjects: [String] = []
+    /// Subjects already used, keyed by the app they were used for. Scoping this
+    /// per app matters: a global list told the model to avoid objects from a
+    /// completely different app, which pushed it off the fitting choice.
+    @Published private(set) var subjectMemory: [String: [String]] = [:]
 
     // State
     @Published private(set) var phase: GenerationPhase = .idle
@@ -213,7 +214,8 @@ final class GeneratorModel: ObservableObject {
         // Only a subject the user actually typed survives a reroll. One we
         // derived is thrown away, so the next roll picks a different object.
         let keepSubject = !typedSubject.isEmpty && typedSubject != derivedSubject
-        let avoid = recentSubjects
+        let memoryKey = Self.subjectKey(appName: name, description: description)
+        let avoid = Array((subjectMemory[memoryKey] ?? []).prefix(Defaults.rememberedSubjects))
 
         let runHandles = (0..<count).map { _ in AgyProcessHandle() }
         handles = runHandles
@@ -306,7 +308,7 @@ final class GeneratorModel: ObservableObject {
                     derivedSubject = first.subject
                     subject = first.subject
                 }
-                rememberSubjects(finished.map(\.subject))
+                rememberSubjects(finished.map(\.subject), for: memoryKey)
 
                 phase = .done
                 if finished.count == 1 && count == 1 {
@@ -484,13 +486,17 @@ final class GeneratorModel: ObservableObject {
         }
     }
 
-    private func rememberSubjects(_ used: [String]) {
-        for subject in used where !recentSubjects.contains(subject) {
-            recentSubjects.insert(subject, at: 0)
+    /// One memory bucket per app name and description.
+    static func subjectKey(appName: String, description: String) -> String {
+        "\(appName.lowercased())|\(description.lowercased())"
+    }
+
+    private func rememberSubjects(_ used: [String], for key: String) {
+        var remembered = subjectMemory[key] ?? []
+        for subject in used where !remembered.contains(subject) {
+            remembered.insert(subject, at: 0)
         }
-        if recentSubjects.count > Defaults.rememberedSubjects {
-            recentSubjects = Array(recentSubjects.prefix(Defaults.rememberedSubjects))
-        }
+        subjectMemory[key] = Array(remembered.prefix(Defaults.rememberedSubjects))
     }
 
     /// The parts of a run that every variant shares.
@@ -631,7 +637,7 @@ final class GeneratorModel: ObservableObject {
         variants = []
         selectedVariantID = nil
         derivedSubject = ""
-        recentSubjects = []
+        subjectMemory = [:]
         refineRequest = ""
         showingPaletteLibrary = false
         lastPrompt = ""
