@@ -8,13 +8,6 @@ Generate up to four at once and keep the one you like. If one is nearly right, s
 
 <img src="docs/screenshot.png" alt="The IconForge window: inputs on the left, the finished icon previewed on light and dark desktops, past runs along the bottom" width="100%">
 
-<p>
-  <img src="docs/examples/dupefind.png" width="104" alt="DupeFind: a snake on a green gradient">
-  <img src="docs/examples/mongo.png" width="104" alt="Mongo: a leaf on an orange gradient">
-  <img src="docs/examples/tusk.png" width="104" alt="Tusk: a dark safe on a sunset gradient">
-  <img src="docs/examples/iconforge-full.png" width="104" alt="IconForge: a pale pigeon on a deep blue gradient">
-</p>
-
 ## What you need
 
 - macOS 14 or later
