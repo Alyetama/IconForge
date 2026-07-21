@@ -2,7 +2,9 @@
 
 IconForge turns a sentence about an app into a finished macOS icon.
 
-You type a name and what the app does. IconForge writes the image prompt, hands it to the `agy` CLI, and then does the part that usually gets skipped: it masks the artwork into the Big Sur squircle, drops a soft shadow under it, and builds every size Apple asks for. You get an `.icns` you can drop straight into a bundle.
+You type a name and what the app does. IconForge decides what object to draw, writes the image prompt, hands it to the `agy` CLI, and then does the part that usually gets skipped: it cuts the artwork to the right shape for the Mac you are on, adds the edge treatment that makes an icon catch light instead of looking like a flat picture, and builds every size Apple asks for. You get an `.icns` you can drop straight into a bundle, plus a clipboard instruction that tells a coding agent to install it for you.
+
+Generate up to four at a time and keep the one you like. If it is nearly right, say what to change in plain words and IconForge edits that icon rather than starting over.
 
 <img src="docs/mockup.svg" alt="IconForge window showing an icon preview on light and dark backgrounds" width="100%">
 
@@ -32,14 +34,19 @@ Fill in the name and a short description. Everything else is optional:
 
 - **Subject** is the object the icon shows. Leave it blank and IconForge asks the model to pick one, then writes its answer back into the field so you can edit it and reroll.
 - **Palette** opens a grid of 192 trending [Coolors](https://coolors.co/palettes/trending) palettes. Pick one and its hex values go into the prompt verbatim, or ignore the grid and type a direction like "sea glass to deep teal" in the field below it. To swap the library for a different export, run `python3 Tools/generate_palettes.py your-palettes.json` and rebuild.
-- **Style** nudges the render toward Standard, Playful, Minimal, or Glossy.
+- **Style** picks the look: Standard, Playful, Minimal, Glossy, Technical, Editorial, Retro, Luxe, Organic or Neon. Each one also biases which surface finish the render rolls, so Editorial gets paper and card rather than injection-moulded plastic.
+- **Finish** is a local pass over the finished artwork: Flat leaves it alone, Apple edge lights the top lip and shades the base the way system icons catch light, Glossy dome adds a highlight over the top half, Deep shadow throws it further, Punchy enriches the colour. Switching between them re-renders in milliseconds and never calls the model, so it costs nothing to try all five.
+- **Body size** decides how much of the tile the icon fills. See [the note on macOS 26](#the-white-plate-on-macos-26) before changing it.
 - **Model** lists what `agy models` reports, minus the Claude entries. Refresh it with the button next to the picker. To change what gets filtered out, edit `excludedModelPrefixes` in `Sources/IconForge/AgyRunner.swift`.
-
 - **Icons per run** generates up to four at once, each with its own subject and its own art direction. They appear as a row under the preview and clicking one makes it the active icon for Export, Reveal and the agent prompt.
 
-Press Generate. One icon takes roughly fifteen to thirty seconds on the low-effort Gemini models; four run in parallel and take about as long as the slowest.
+Press Generate. One icon takes half a minute or so on `gemini-3.1-pro-high`, the default; four run in parallel and take about as long as the slowest. Cheaper models are faster but noticeably flatter, and in testing they ignored the palette hex values more often.
 
-Reroll deliberately changes the idea, not just the pixels. A subject IconForge picked for you is thrown away and re-derived, steering clear of the last dozen it used, so a second press gives you a different object rather than the same one drawn again. Type your own subject and it sticks: only the art direction varies. The strip along the bottom keeps every past run, and clicking one loads its icon and inputs back into the window.
+Reroll changes the idea, not just the pixels. A subject IconForge picked for you is thrown away and re-derived, steering clear of the half dozen it last used for that same app, so a second press gives you a different object rather than the same one drawn again. Type your own subject and it sticks: only the art direction varies. The strip along the bottom keeps every past run, and clicking one loads its icon and inputs back into the window.
+
+### Editing an icon you almost like
+
+The field under the preview takes a change in plain words: "make the bird bigger", "drop the envelope", "warmer background". IconForge sends the existing artwork back with instructions to keep the subject, composition, angle and palette and change only what you asked for. The result appears beside the original rather than replacing it, so you can compare and keep whichever won.
 
 ## Where the files go
 
@@ -64,12 +71,26 @@ Change the folder in Settings, or use the Export button to copy a finished set s
 ## How the icon is built
 
 1. The raw artwork is centre-cropped and redrawn at 1024x1024, whatever size `agy` returned.
-2. A squircle path is clipped out of it. The body is 824x824 on the 1024 canvas, with continuous corners built from a superellipse rather than circular arcs, so the curve meets each edge without a visible seam.
-3. The masked body is composited onto a transparent canvas with a soft shadow beneath it. The surrounding margin stays transparent, which is what makes the icon sit correctly in the Dock.
+2. The chosen finish goes on: a lit top lip, a shaded base and a hairline just inside the silhouette, all clipped so nothing spills.
+3. Unless the body size is Full bleed, a squircle path is clipped out of it, with continuous corners built from a superellipse rather than circular arcs, so the curve meets each edge without a visible seam. The masked body is then centred on a transparent canvas with a soft shadow beneath.
 4. Every required size is rendered from the 1024 master, and `iconutil` packs the `.iconset` into an `.icns`.
 5. A `.ico` is written alongside it with PNG entries from 16 to 256 pixels.
 
-The prompt tells the model not to draw a rounded square, because step 2 applies the real one. Change one and you should change the other.
+Steps 2 and 3 are pure Core Graphics and read only from `source_raw.png`, which is why changing the finish or the body size re-renders instantly and can be undone by switching back.
+
+The prompt never mentions rounded squares or app icons at all. It asks for a 3D render of one object on a gradient, because describing the artifact pulled the model toward drawing icon presentations, borders and badges that then had to be argued out of it. The rounding happens here in step 3, or in macOS itself.
+
+### The white plate on macOS 26
+
+Tahoe wraps any legacy `.icns` in a system-drawn rounded plate and centres the artwork on it. An icon carrying its own mask and margin ends up sitting inside that plate, and the plate reads as a white border around your icon. Three body sizes handle this:
+
+| Setting | Body | Use when |
+|---|---|---|
+| Apple standard | 824 of 1024 | Targeting macOS 14 or 15, matching Apple's template exactly |
+| Large | 928 of 1024 | Same, but you want the icon to sit larger in the Dock |
+| **Full bleed** | Plain 1024 square, no mask | macOS 26, where the system does the rounding. The default. |
+
+Full bleed deliberately skips the squircle, the margin and the shadow: two masks fighting each other was the whole problem.
 
 ### Tuning the shape
 
@@ -86,6 +107,10 @@ static let shadowOpacity: CGFloat = 0.28
 ```
 
 Raise `squircleExponent` for squarer corners, lower it toward 2 for a plain rounded rectangle. Rebuild and the change shows up in the next preview, including the placeholder outline.
+
+### The prompts
+
+Two prompts do the work, both in [`Sources/IconForge/PromptBuilder.swift`](Sources/IconForge/PromptBuilder.swift). The first asks a text-only call to name the objects worth drawing, mixing the literal choice with a lateral one and refusing the usual gear and lightbulb clichés. The second is the image prompt, assembled from your inputs plus a randomly rolled material, camera angle and composition, so two presses of Generate never hand back the same picture. Both are plain string builders. Edit them, rebuild, and the next icon uses the new wording.
 
 ## When something breaks
 

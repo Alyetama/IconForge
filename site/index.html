@@ -236,9 +236,10 @@
   <div class="hero">
     <h1>Describe the app.<br>Get the <span class="lit">icon</span>.</h1>
     <p class="lede">
-      IconForge writes the image prompt for you, runs it through the agy CLI, then masks the result
-      into a real macOS squircle and builds every size Apple asks for. What comes out is an icns you
-      can drop into a bundle, not a square PNG you still have to deal with.
+      IconForge decides what object to draw, writes the image prompt, runs it through the agy CLI,
+      then cuts the result to the right shape for the Mac you are on and builds every size Apple
+      asks for. What comes out is an icns you can drop into a bundle, not a square PNG you still
+      have to deal with.
     </p>
     <div class="cta">
       <span class="cmd"><span class="sigil">$</span> ./install.sh</span>
@@ -254,11 +255,11 @@
   <section id="how">
     <h2>From prompt to icns</h2>
     <ol class="steps">
-      <li><strong>You describe the app</strong><span>A name and one line about what it does. Colour direction and style are optional.</span></li>
-      <li><strong>It picks a subject</strong><span>Leave the subject blank and the model names the single object the icon should show. The answer lands back in the field, so you can edit it and try again.</span></li>
-      <li><strong>agy draws it</strong><span>The assembled prompt goes to the model you selected. The prompt tells it to fill the whole square and to leave the rounded frame alone.</span></li>
-      <li><strong>The mask goes on</strong><span>An 824 squircle with superellipse corners, centred on a 1024 transparent canvas, with a soft shadow underneath.</span></li>
-      <li><strong>Everything gets written</strong><span>Ten iconset sizes, the icns from iconutil, a Windows ico, the masked 1024, and the untouched original.</span></li>
+      <li><strong>You describe the app</strong><span>A name and one line about what it does. Colour, style and finish are optional.</span></li>
+      <li><strong>It picks a subject</strong><span>Leave the subject blank and the model names the object worth drawing, mixing the literal choice with a lateral one. The answer lands back in the field, so you can edit it and try again.</span></li>
+      <li><strong>agy draws it</strong><span>The prompt describes a 3D render of one object on a gradient, never an app icon, because asking for the artifact is what makes models draw borders and badges.</span></li>
+      <li><strong>The shape goes on</strong><span>Superellipse corners and a soft shadow, or a plain square when macOS is doing the rounding itself. The finish adds a lit top edge and a shaded base.</span></li>
+      <li><strong>Everything gets written</strong><span>Ten iconset sizes, the icns from iconutil, a Windows ico, the finished 1024, and the untouched original.</span></li>
     </ol>
   </section>
 
@@ -266,24 +267,36 @@
     <h2>Details that matter</h2>
     <div class="grid">
       <div class="card">
-        <h3>The real corner curve</h3>
-        <p>Each corner follows a superellipse, not a circular arc, so it meets the straight edge without the seam you get from a plain rounded rectangle. The exponent is one constant if you want it tighter.</p>
+        <h3>Four at once, keep one</h3>
+        <p>Ask for up to four icons and each gets its own subject, material and camera angle. They arrive as a row under the preview; click the one you want and it becomes the icon everything else acts on.</p>
+      </div>
+      <div class="card">
+        <h3>Edit it in words</h3>
+        <p>"Make the bird bigger." The existing artwork goes back to the model with orders to keep the subject, composition and palette and change only that. The original stays where it was.</p>
+      </div>
+      <div class="card">
+        <h3>Finishes that cost nothing</h3>
+        <p>A lit top lip, a shaded base, a glossy dome, a deeper shadow, richer colour. These are local Core Graphics passes over the stored artwork, so trying all five takes milliseconds and no model calls.</p>
+      </div>
+      <div class="card">
+        <h3>It knows about the plate</h3>
+        <p>macOS 26 wraps a legacy icns in its own rounded plate, which turns your careful margin into a white border. Full bleed hands the system a plain square and lets it do the rounding.</p>
+      </div>
+      <div class="card">
+        <h3>Rerolls change their mind</h3>
+        <p>A subject IconForge chose gets re-derived on the next press, avoiding the last few it used for that app, so you get a different idea rather than the same object drawn again.</p>
+      </div>
+      <div class="card">
+        <h3>Hand it to an agent</h3>
+        <p>One button copies an instruction naming the exact files and telling a coding agent to install the icon on whatever you have open, rebuild and reinstall.</p>
       </div>
       <div class="card">
         <h3>Nothing gets overwritten</h3>
         <p>Every run lands in its own timestamped folder with the prompt that produced it, so you can go back and see exactly what you asked for.</p>
       </div>
       <div class="card">
-        <h3>Reroll until it lands</h3>
-        <p>Same inputs, new draw. Past runs stay in a strip along the bottom, and clicking one restores its icon and the fields that made it.</p>
-      </div>
-      <div class="card">
         <h3>It tells you what went wrong</h3>
         <p>A missing agy binary, a model name agy does not know, an absent iconutil. Each one gets a message that says what to do about it instead of a silent failure.</p>
-      </div>
-      <div class="card">
-        <h3>Your model, your call</h3>
-        <p>The picker is filled from agy models at launch, so whatever your install can drive is what you can choose. One constant controls which families are left out.</p>
       </div>
       <div class="card">
         <h3>Native, and small</h3>
