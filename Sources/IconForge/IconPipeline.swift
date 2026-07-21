@@ -29,6 +29,36 @@ enum IconGeometry {
     static let shadowOpacity: CGFloat = 0.28
 }
 
+/// How much of the 1024 canvas the icon body fills.
+///
+/// Apple's own template leaves a wide transparent margin for the shadow, which
+/// is correct but makes an icon look small next to the many third-party apps
+/// that fill more of their tile.
+enum IconBodySize: String, CaseIterable, Identifiable, Codable {
+    case appleStandard = "Apple standard"
+    case large = "Large"
+    case fullBleed = "Full bleed"
+
+    var id: String { rawValue }
+
+    /// Body edge in pixels on the 1024 canvas.
+    var pixels: CGFloat {
+        switch self {
+        case .appleStandard: return 824
+        case .large: return 928
+        case .fullBleed: return 1024
+        }
+    }
+
+    var blurb: String {
+        switch self {
+        case .appleStandard: return "824 of 1024, Apple's template margin"
+        case .large: return "928 of 1024, fills more of the tile"
+        case .fullBleed: return "Edge to edge, no room for a shadow"
+        }
+    }
+}
+
 /// Apple's required .iconset members: (file name, rendered pixel size).
 let iconsetEntries: [(name: String, pixels: Int)] = [
     ("icon_16x16.png", 16),
@@ -85,10 +115,11 @@ enum IconPipeline {
     /// Full post-process: raw artwork in, complete icon set out.
     static func process(rawImage rawURL: URL,
                         into sessionDir: URL,
-                        finish: IconFinish = .appleEdge) throws -> Artifacts {
+                        finish: IconFinish = .appleEdge,
+                        bodySize: IconBodySize = .large) throws -> Artifacts {
         var source = try normalize(try loadImage(at: rawURL))
         if finish == .punchy { source = try enrich(source) }
-        let body = try applyFinish(finish, to: try maskBody(from: source))
+        let body = try applyFinish(finish, to: try maskBody(from: source, edge: bodySize.pixels))
         let masked = try composite(body: body, finish: finish)
 
         let maskedURL = sessionDir.appendingPathComponent("icon_1024.png")
@@ -195,8 +226,8 @@ enum IconPipeline {
     // MARK: Masking & composition
 
     /// Squircle-clipped artwork at body size, transparent outside the shape.
-    static func maskBody(from source: CGImage) throws -> CGImage {
-        let size = Int(IconGeometry.bodySize)
+    static func maskBody(from source: CGImage, edge: CGFloat = IconGeometry.bodySize) throws -> CGImage {
+        let size = Int(edge)
         let ctx = try makeContext(size: size)
         let rect = CGRect(x: 0, y: 0, width: CGFloat(size), height: CGFloat(size))
         ctx.addPath(squirclePath(in: rect))
@@ -296,7 +327,8 @@ enum IconPipeline {
     static func composite(body: CGImage, finish: IconFinish = .appleEdge) throws -> CGImage {
         let size = Int(IconGeometry.canvas)
         let ctx = try makeContext(size: size)
-        let inset = (IconGeometry.canvas - IconGeometry.bodySize) / 2
+        let edge = CGFloat(body.width)
+        let inset = (IconGeometry.canvas - edge) / 2
 
         let deep = finish == .deepShadow
         let opacity = deep ? 0.38 : IconGeometry.shadowOpacity
@@ -307,8 +339,7 @@ enum IconPipeline {
         ctx.setShadow(offset: CGSize(width: 0, height: -drop),
                       blur: blur,
                       color: shadow)
-        ctx.draw(body, in: CGRect(x: inset, y: inset,
-                                  width: IconGeometry.bodySize, height: IconGeometry.bodySize))
+        ctx.draw(body, in: CGRect(x: inset, y: inset, width: edge, height: edge))
 
         guard let out = ctx.makeImage() else { throw IconPipelineError.contextFailure }
         return out

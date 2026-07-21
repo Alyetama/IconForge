@@ -138,6 +138,15 @@ final class GeneratorModel: ObservableObject {
         }
     }
 
+    /// How much of the canvas the icon body fills. Same deal: a local re-render.
+    @Published var bodySize: IconBodySize = IconBodySize(rawValue: UserDefaults.standard.string(forKey: "bodySize") ?? "") ?? .large {
+        didSet {
+            guard bodySize != oldValue else { return }
+            UserDefaults.standard.set(bodySize.rawValue, forKey: "bodySize")
+            reapplyFinish()
+        }
+    }
+
     // Model discovery
     @Published private(set) var availableModels: [String] = []
     @Published private(set) var isLoadingModels = false
@@ -275,7 +284,8 @@ final class GeneratorModel: ObservableObject {
                                            baseDir: baseDir,
                                            stamp: stamp,
                                            isBatch: count > 1,
-                                           finish: finish)
+                                           finish: finish,
+                                           bodySize: bodySize)
 
                 var built: [(Int, IconVariant, String)] = []
                 try await withThrowingTaskGroup(of: (Int, IconVariant, String)?.self) { group in
@@ -345,6 +355,7 @@ final class GeneratorModel: ObservableObject {
     func reapplyFinish() {
         guard let current = artifacts, !phase.isBusy else { return }
         let chosen = finish
+        let chosenSize = bodySize
         let raw = current.rawPNG
         let dir = current.sessionDir
         guard FileManager.default.fileExists(atPath: raw.path) else { return }
@@ -352,7 +363,7 @@ final class GeneratorModel: ObservableObject {
         Task {
             do {
                 let rebuilt = try await Task.detached(priority: .userInitiated) {
-                    try IconPipeline.process(rawImage: raw, into: dir, finish: chosen)
+                    try IconPipeline.process(rawImage: raw, into: dir, finish: chosen, bodySize: chosenSize)
                 }.value
                 let image = NSImage(contentsOf: rebuilt.maskedPNG)
                 artifacts = rebuilt
@@ -361,7 +372,7 @@ final class GeneratorModel: ObservableObject {
                     variants[index].artifacts = rebuilt
                     variants[index].image = image
                 }
-                statusDetail = "\(chosen.rawValue) finish applied"
+                statusDetail = "\(chosen.rawValue), \(chosenSize.rawValue)"
                 reloadHistory()
             } catch {
                 errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
@@ -388,6 +399,7 @@ final class GeneratorModel: ObservableObject {
         let baseDir = outputDirectory
         let agyOverride = agyPath
         let chosenFinish = finish
+        let chosenBodySize = bodySize
         let styleVariant = style
         let paletteHint = palette.trimmingCharacters(in: .whitespacesAndNewlines)
         let runHandle = AgyProcessHandle()
@@ -436,7 +448,8 @@ final class GeneratorModel: ObservableObject {
 
                 phase = .masking
                 let rebuilt = try await Task.detached(priority: .userInitiated) {
-                    try IconPipeline.process(rawImage: rawURL, into: sessionDir, finish: chosenFinish)
+                    try IconPipeline.process(rawImage: rawURL, into: sessionDir,
+                                             finish: chosenFinish, bodySize: chosenBodySize)
                 }.value
 
                 let metadata = RunMetadata(appName: name,
@@ -514,6 +527,7 @@ final class GeneratorModel: ObservableObject {
         let stamp: String
         let isBatch: Bool
         let finish: IconFinish
+        let bodySize: IconBodySize
     }
 
     /// Generates and post-processes one icon. Returns its index, the finished
@@ -579,7 +593,8 @@ final class GeneratorModel: ObservableObject {
         }
 
         let artifacts = try await Task.detached(priority: .userInitiated) {
-            try IconPipeline.process(rawImage: rawURL, into: sessionDir, finish: request.finish)
+            try IconPipeline.process(rawImage: rawURL, into: sessionDir,
+                                     finish: request.finish, bodySize: request.bodySize)
         }.value
 
         let metadata = RunMetadata(appName: request.appName,

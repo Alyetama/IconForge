@@ -114,6 +114,16 @@ private struct InspectorPane: View {
                     .labelsHidden()
                 }
 
+                FieldGroup(title: "Body size", symbol: "arrow.up.left.and.arrow.down.right",
+                           hint: model.bodySize.blurb) {
+                    Picker("", selection: $model.bodySize) {
+                        ForEach(IconBodySize.allCases) { option in
+                            Text(option.rawValue).tag(option)
+                        }
+                    }
+                    .labelsHidden()
+                }
+
                 FieldGroup(title: "Icons per run", symbol: "square.grid.2x2",
                            hint: model.variantCount > 1 ? "pick one afterwards" : nil) {
                     Picker("", selection: $model.variantCount) {
