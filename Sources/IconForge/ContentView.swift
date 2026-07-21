@@ -980,10 +980,12 @@ private struct SettingsSheet: View {
             }
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("agy path").font(.callout.weight(.medium))
-                TextField("found automatically", text: $model.agyPath)
+                Text("Binary paths").font(.callout.weight(.medium))
+                TextField("agy: found automatically", text: $model.agyPath)
                     .textFieldStyle(.roundedBorder)
-                Text("Only needed if agy lives somewhere unusual. Run `which agy` to find it.")
+                TextField("codex: found automatically", text: $model.codexPath)
+                    .textFieldStyle(.roundedBorder)
+                Text("Only needed if either lives somewhere unusual. Run `which agy` or `which codex`.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -993,6 +995,7 @@ private struct SettingsSheet: View {
                     model.outputDirectoryPath = Defaults.outputDirectory.path
                     model.model = Defaults.model
                     model.agyPath = ""
+                    model.codexPath = ""
                 }
                 Spacer()
                 Button("Done") {

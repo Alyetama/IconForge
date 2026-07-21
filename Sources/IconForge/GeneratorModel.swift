@@ -80,7 +80,7 @@ enum GenerationPhase: Equatable {
         switch self {
         case .idle: return "Ready"
         case .derivingSubject: return "Working out the subject…"
-        case .generatingArtwork: return "Generating artwork with agy…"
+        case .generatingArtwork: return "Generating artwork…"
         case .masking: return "Applying the squircle mask…"
         case .buildingIconset: return "Building .iconset, .icns and .ico…"
         case .done: return "Done"
@@ -103,6 +103,7 @@ final class GeneratorModel: ObservableObject {
     @AppStorage("outputDirectory") var outputDirectoryPath = Defaults.outputDirectory.path
     @AppStorage("model") var model = Defaults.model
     @AppStorage("agyPath") var agyPath = ""
+    @AppStorage("codexPath") var codexPath = ""
     /// Which CLI draws the artwork. Stored as a raw value so @AppStorage can
     /// hold it; the picker binds through `backend`.
     @AppStorage("backend") private var backendRaw = GeneratorBackend.agy.rawValue
@@ -244,7 +245,7 @@ final class GeneratorModel: ObservableObject {
 
         isLoadingModels = true
         modelListError = nil
-        let agyOverride = agyPath
+        let agyOverride = binaryOverride(for: backend)
 
         Task {
             do {
@@ -273,6 +274,16 @@ final class GeneratorModel: ObservableObject {
         }
     }
 
+    /// The path override that belongs to this backend. Using one field for
+    /// both sent codex requests to the agy binary, which then rejected codex's
+    /// own arguments.
+    func binaryOverride(for backend: GeneratorBackend) -> String {
+        switch backend {
+        case .agy: return agyPath
+        case .codex: return codexPath
+        }
+    }
+
     // MARK: - Generation
 
     func generate() {
@@ -285,8 +296,8 @@ final class GeneratorModel: ObservableObject {
         let styleVariant = style
         let modelName = model
         let baseDir = outputDirectory
-        let agyOverride = agyPath
         let chosenBackend = backend
+        let agyOverride = binaryOverride(for: chosenBackend)
         let chosenEffort = effort
         let count = max(1, min(Defaults.maxVariants, variantCount))
 
@@ -391,7 +402,7 @@ final class GeneratorModel: ObservableObject {
                     }
                 }
 
-                guard !built.isEmpty else { throw AgyError.noImageProduced(output: "") }
+                guard !built.isEmpty else { throw AgyError.noImageProduced(tool: chosenBackend.rawValue, output: "") }
                 built.sort { $0.0 < $1.0 }
 
                 let finished = built.map(\.1)
@@ -542,7 +553,7 @@ final class GeneratorModel: ObservableObject {
                                                            sessionDir: sessionDir,
                                                            after: started) else {
                     try? FileManager.default.removeItem(at: sessionDir)
-                    throw AgyError.noImageProduced(output: output)
+                    throw AgyError.noImageProduced(tool: chosenBackend.rawValue, output: output)
                 }
                 if produced != rawURL {
                     try? FileManager.default.removeItem(at: rawURL)
@@ -693,7 +704,7 @@ final class GeneratorModel: ObservableObject {
             // folder behind either.
             try? FileManager.default.removeItem(at: sessionDir)
             if request.isBatch { return nil }
-            throw AgyError.noImageProduced(output: lastOutput)
+            throw AgyError.noImageProduced(tool: request.backend.rawValue, output: lastOutput)
         }
         if produced != rawURL {
             try? FileManager.default.removeItem(at: rawURL)

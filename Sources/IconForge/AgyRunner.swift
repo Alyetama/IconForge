@@ -56,41 +56,41 @@ enum GeneratorBackend: String, CaseIterable, Identifiable, Codable {
 }
 
 enum AgyError: LocalizedError {
-    case notFound(searched: [String])
-    case launchFailed(String)
-    case timedOut(seconds: Int)
-    case failed(status: Int32, output: String)
-    case noImageProduced(output: String)
+    case notFound(tool: String, searched: [String])
+    case launchFailed(tool: String, String)
+    case timedOut(tool: String, seconds: Int)
+    case failed(tool: String, status: Int32, output: String)
+    case noImageProduced(tool: String, output: String)
 
     var errorDescription: String? {
         switch self {
-        case .notFound(let searched):
+        case .notFound(let tool, let searched):
             return """
-            Could not find the agy command.
+            Could not find the \(tool) command.
 
             Looked in: \(searched.joined(separator: ", "))
 
-            Install agy, or point IconForge at it directly under Settings → agy path. \
+            Install \(tool), or point IconForge at it directly under Settings. \
             (Apps launched from Finder don't inherit your shell PATH, so a tool in ~/.local/bin \
             can be invisible to them even when it works in Terminal.)
             """
-        case .launchFailed(let message):
-            return "Could not start agy: \(message)"
-        case .timedOut(let seconds):
-            return "agy did not finish within \(seconds) seconds and was stopped. Try again, or pick a faster model in Settings."
-        case .failed(let status, let output):
+        case .launchFailed(let tool, let message):
+            return "Could not start \(tool): \(message)"
+        case .timedOut(let tool, let seconds):
+            return "\(tool) did not finish within \(seconds) seconds and was stopped. Try again, or pick a faster model."
+        case .failed(let tool, let status, let output):
             let tail = output.trimmingCharacters(in: .whitespacesAndNewlines)
             return """
-            agy exited with code \(status).
+            \(tool) exited with code \(status).
 
             \(tail.isEmpty ? "It printed nothing." : tail)
 
-            If this mentions an unknown model, check the model name in Settings against `agy models`.
+            If this mentions an unknown model, check the model name against what \(tool) actually offers.
             """
-        case .noImageProduced(let output):
+        case .noImageProduced(let tool, let output):
             let tail = output.trimmingCharacters(in: .whitespacesAndNewlines)
             return """
-            agy finished but no image file appeared.
+            \(tool) finished but no image file appeared.
 
             It said: \(tail.isEmpty ? "(nothing)" : tail)
 
@@ -163,7 +163,7 @@ enum AgyRunner {
         if !trimmed.isEmpty {
             let expanded = (trimmed as NSString).expandingTildeInPath
             guard fm.isExecutableFile(atPath: expanded) else {
-                throw AgyError.notFound(searched: [expanded])
+                throw AgyError.notFound(tool: name, searched: [expanded])
             }
             return URL(fileURLWithPath: expanded)
         }
@@ -181,7 +181,7 @@ enum AgyRunner {
             return URL(fileURLWithPath: fromShell)
         }
 
-        throw AgyError.notFound(searched: seen)
+        throw AgyError.notFound(tool: name, searched: seen)
     }
 
     private static func lookupViaLoginShell(_ name: String) -> String? {
@@ -228,14 +228,14 @@ enum AgyRunner {
         do {
             try process.run()
         } catch {
-            throw AgyError.launchFailed(error.localizedDescription)
+            throw AgyError.launchFailed(tool: binary.lastPathComponent, error.localizedDescription)
         }
         let data = outPipe.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
 
         let text = String(data: data, encoding: .utf8) ?? ""
         guard process.terminationStatus == 0 else {
-            throw AgyError.failed(status: process.terminationStatus, output: text)
+            throw AgyError.failed(tool: binary.lastPathComponent, status: process.terminationStatus, output: text)
         }
 
         let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-_")
@@ -293,7 +293,7 @@ enum AgyRunner {
         do {
             try process.run()
         } catch {
-            throw AgyError.launchFailed(error.localizedDescription)
+            throw AgyError.launchFailed(tool: backend.rawValue, error.localizedDescription)
         }
         handle.adopt(process)
 
@@ -311,9 +311,9 @@ enum AgyRunner {
 
         let output = collector.text
         if handle.isCancelled { throw CancellationError() }
-        if timeoutFlag.tripped { throw AgyError.timedOut(seconds: timeout) }
+        if timeoutFlag.tripped { throw AgyError.timedOut(tool: backend.rawValue, seconds: timeout) }
         guard process.terminationStatus == 0 else {
-            throw AgyError.failed(status: process.terminationStatus, output: output)
+            throw AgyError.failed(tool: backend.rawValue, status: process.terminationStatus, output: output)
         }
         return output
     }
