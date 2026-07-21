@@ -190,6 +190,7 @@ enum PromptBuilder {
     /// applies afterwards is why the object has to stay inside the central 70%.
     static func imagePrompt(description: String,
                             subject: String,
+                            form: String?,
                             palette: String,
                             style: StyleVariant,
                             variation: VariationRecipe) -> String {
@@ -198,10 +199,16 @@ enum PromptBuilder {
             ? "a cohesive palette of one dominant hue plus one supporting accent that suits an app that \(description)"
             : trimmedPalette
 
-        return """
-        A polished 3D render of \(subject) — the soft, friendly, high-end 3D illustration style used for modern Mac app artwork. Exactly one object on a clean gradient backdrop, nothing else in frame.
+        // The object's own shape is worth more prompt space than another
+        // sentence of art direction: with a bare noun the model invents a form,
+        // and its invention is what produces the "that's not what I asked for"
+        // icons.
+        let formClause = form.map { ": \($0)" } ?? ""
 
-        Form: confident and simplified — a few big, rounded primary masses in \(variation.material). Every edge and corner generously rounded. Keep only a handful of bold, functional details; no fine texture, engraving, patterning or clutter. The object should look like a beautifully manufactured physical product, not a photograph.\(style.modifier)
+        return """
+        A polished 3D render of \(subject)\(formClause). Rendered in the soft, friendly, high-end 3D illustration style used for modern Mac app artwork. Exactly one object on a clean gradient backdrop, nothing else in frame.
+
+        Form: confident and simplified — a few big, rounded masses in \(variation.material), every edge generously rounded, surface detail suggested rather than drawn. It should look like a beautifully manufactured physical product, not a photograph.\(style.modifier)
 
         \(variation.angle)
 
@@ -291,7 +298,14 @@ enum PromptBuilder {
         - avoid tired icon clichés — gear, lightbulb, rocket, generic star, magnifying glass, checkmark — unless the app is literally about that object
         - word each as 2 to 6 lowercase words: the object plus at most one vivid form or character adjective (e.g. "a plump paper dart", "a stout brass bell", "a squat mechanical timer")\(avoidClause)
 
-        Reply with the objects only, one per line, no numbering, no punctuation, no explanation.
+        For each object, add a short description of its physical shape: the masses it is built from, its proportions, what makes its outline recognisable. Eight to eighteen words, no colours, no materials, no mood.
+
+        Reply with one object per line in exactly this form, nothing else:
+
+        object; shape description
+
+        For example:
+        a plump paper dart; a wide folded triangle with a raised centre crease and two swept-back wings
         """
     }
 
@@ -305,10 +319,16 @@ enum PromptBuilder {
         "representing", "these", "below", "following", "choice", "choices",
     ]
 
+    /// One suggested subject and the shape note that goes with it.
+    struct SubjectIdea {
+        let subject: String
+        let form: String?
+    }
+
     /// Pulls usable subjects out of whatever agy printed.
-    static func cleanSubjects(_ raw: String, count: Int) -> [String] {
+    static func cleanSubjects(_ raw: String, count: Int) -> [SubjectIdea] {
         var seen = Set<String>()
-        var results: [String] = []
+        var results: [SubjectIdea] = []
 
         for line in raw.split(separator: "\n") {
             var candidate = line.trimmingCharacters(in: .whitespaces)
@@ -316,6 +336,15 @@ enum PromptBuilder {
             candidate = candidate.replacingOccurrences(of: #"^\s*(\d+[\.\)]|[-*•])\s*"#,
                                                        with: "",
                                                        options: .regularExpression)
+
+            // "object; shape description"
+            var form: String?
+            if let split = candidate.firstIndex(of: ";") {
+                let note = candidate[candidate.index(after: split)...]
+                    .trimmingCharacters(in: CharacterSet(charactersIn: "\"'`.*_ "))
+                if note.count >= 12 { form = note }
+                candidate = String(candidate[..<split])
+            }
             candidate = candidate.trimmingCharacters(in: CharacterSet(charactersIn: "\"'`.*_ "))
 
             let words = candidate.lowercased()
@@ -330,10 +359,21 @@ enum PromptBuilder {
                   !words.contains(where: { chatterWords.contains($0) }),
                   seen.insert(candidate.lowercased()).inserted else { continue }
 
-            results.append(candidate)
+            results.append(SubjectIdea(subject: candidate, form: form))
             if results.count == count { break }
         }
         return results
+    }
+
+    /// Asks only for the shape of a subject the user typed.
+    static func formPrompt(subject: String) -> String {
+        """
+        Describe the physical shape of \(subject) for someone modelling it in 3D.
+
+        The masses it is built from, its proportions, and what makes its outline recognisable.         Eight to eighteen words. No colours, no materials, no mood, no preamble.
+
+        Reply with the description only.
+        """
     }
 
     /// Last-resort subject when the model call fails.

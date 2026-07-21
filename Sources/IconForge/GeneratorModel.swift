@@ -281,9 +281,17 @@ final class GeneratorModel: ObservableObject {
                 let stamp = Self.timestamp()
 
                 // 1. Subjects: the typed one for every variant, or a fresh set.
-                var subjects: [String]
+                var subjects: [PromptBuilder.SubjectIdea]
                 if keepSubject {
-                    subjects = Array(repeating: typedSubject, count: count)
+                    // The shape note matters most for a subject we did not
+                    // choose, since the model has no idea what the user means.
+                    let form = await Self.deriveForm(binary: binary,
+                                                     model: modelName,
+                                                     subject: typedSubject,
+                                                     workingDirectory: baseDir,
+                                                     handle: runHandles[0])
+                    subjects = Array(repeating: PromptBuilder.SubjectIdea(subject: typedSubject, form: form),
+                                     count: count)
                 } else {
                     statusDetail = count == 1
                         ? "Asking \(modelName) what to draw…"
@@ -296,7 +304,7 @@ final class GeneratorModel: ObservableObject {
                                                          avoiding: avoid,
                                                          workingDirectory: baseDir,
                                                          handle: runHandles[0])
-                    derivedSubject = subjects[0]
+                    derivedSubject = subjects[0].subject
                 }
                 if runHandles.contains(where: { $0.isCancelled }) { throw CancellationError() }
 
@@ -326,7 +334,7 @@ final class GeneratorModel: ObservableObject {
                     for index in 0..<count {
                         group.addTask { [request] in
                             try await Self.buildOne(index: index,
-                                                    subject: subjects[index],
+                                                    idea: subjects[index],
                                                     recipe: recipes[index],
                                                     request: request,
                                                     handle: runHandles[index])
@@ -583,7 +591,7 @@ final class GeneratorModel: ObservableObject {
     /// Generates and post-processes one icon. Returns its index, the finished
     /// variant, and the prompt that produced it.
     private static func buildOne(index: Int,
-                                 subject: String,
+                                 idea: PromptBuilder.SubjectIdea,
                                  recipe: VariationRecipe,
                                  request: BatchRequest,
                                  handle: AgyProcessHandle) async throws -> (Int, IconVariant, String)? {
@@ -593,8 +601,10 @@ final class GeneratorModel: ObservableObject {
                                                   stamp: request.stamp,
                                                   suffix: suffix)
 
+        let subject = idea.subject
         let imagePrompt = PromptBuilder.imagePrompt(description: request.description,
                                                     subject: subject,
+                                                    form: idea.form,
                                                     palette: request.palette,
                                                     style: request.style,
                                                     variation: recipe)
@@ -732,7 +742,7 @@ final class GeneratorModel: ObservableObject {
                                        count: Int,
                                        avoiding used: [String],
                                        workingDirectory: URL,
-                                       handle: AgyProcessHandle) async -> [String] {
+                                       handle: AgyProcessHandle) async -> [PromptBuilder.SubjectIdea] {
         try? FileManager.default.createDirectory(at: workingDirectory, withIntermediateDirectories: true)
 
         let prompt = PromptBuilder.subjectsPrompt(appName: appName,
@@ -749,11 +759,35 @@ final class GeneratorModel: ObservableObject {
         }.value
 
         var subjects = raw.map { PromptBuilder.cleanSubjects($0, count: count) } ?? []
-        let fallback = PromptBuilder.fallbackSubject(description: description)
+        let fallback = PromptBuilder.SubjectIdea(subject: PromptBuilder.fallbackSubject(description: description),
+                                                 form: nil)
         while subjects.count < count {
             subjects.append(subjects.first ?? fallback)
         }
         return subjects
+    }
+
+    /// The shape of a subject the user typed. Best effort: without it the
+    /// prompt still works, it just leaves the form up to the image model.
+    private static func deriveForm(binary: URL,
+                                   model: String,
+                                   subject: String,
+                                   workingDirectory: URL,
+                                   handle: AgyProcessHandle) async -> String? {
+        try? FileManager.default.createDirectory(at: workingDirectory, withIntermediateDirectories: true)
+        let raw = try? await Task.detached(priority: .userInitiated) {
+            try AgyRunner.run(binary: binary,
+                              model: model,
+                              prompt: PromptBuilder.formPrompt(subject: subject),
+                              workingDirectory: workingDirectory,
+                              timeout: 120,
+                              handle: handle)
+        }.value
+
+        guard let line = raw?.split(separator: "\n")
+            .map({ $0.trimmingCharacters(in: .whitespaces) })
+            .last(where: { $0.count >= 12 && !$0.hasSuffix(":") }) else { return nil }
+        return line.trimmingCharacters(in: CharacterSet(charactersIn: "\"'`.* "))
     }
 
     // MARK: - Files
