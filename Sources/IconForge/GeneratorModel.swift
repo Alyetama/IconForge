@@ -5,7 +5,10 @@ import SwiftUI
 /// Where output lands by default, and the model IconForge asks for.
 enum Defaults {
     static let outputFolderName = "IconForge"
-    static let model = "gemini-3.6-flash-low"
+    /// Measured against the flash models on an identical prompt: the only one
+    /// that both honoured the palette hexes and produced an actual 3D render,
+    /// at no extra wall-clock cost.
+    static let model = "gemini-3.1-pro-high"
     static let timeoutSeconds = 420
     /// Newest N runs shown in the gallery strip.
     static let historyLimit = 60
