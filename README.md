@@ -2,7 +2,7 @@
 
 IconForge turns a sentence about an app into a finished macOS icon.
 
-You type a name and what the app does. IconForge decides what object to draw, writes the image prompt, hands it to the `agy` CLI, and then does the part that usually gets skipped: it cuts the artwork to the right shape for the Mac you are on, adds the edge treatment that makes an icon catch light instead of looking like a flat picture, and builds every size Apple asks for. You get an `.icns` you can drop straight into a bundle, plus a clipboard instruction that tells a coding agent to install it for you.
+You type a name and what the app does. IconForge decides what object to draw, writes the image prompt, hands it to an agentic CLI — `agy` or `codex`, whichever you pick — and then does the part that usually gets skipped: it cuts the artwork to the right shape for the Mac you are on, adds the edge treatment that makes an icon catch light instead of looking like a flat picture, and builds every size Apple asks for. You get an `.icns` you can drop straight into a bundle, plus a clipboard instruction that tells a coding agent to install it for you.
 
 Generate up to four at a time and keep the one you like. If it is nearly right, say what to change in plain words and IconForge edits that icon rather than starting over.
 
@@ -20,7 +20,7 @@ Four it made, unretouched:
 ## What you need
 
 - macOS 14 or later
-- `agy` installed and runnable from your shell. Check with `which agy`.
+- At least one of `agy` or `codex`, runnable from your shell. Check with `which agy` or `which codex`. You pick between them in the app; you do not need both.
 - Xcode command line tools, for `swift` and `iconutil`. Run `xcode-select --install` if `iconutil` is missing.
 
 `sips` and `iconutil` ship with macOS, so there is nothing else to install.
@@ -46,7 +46,8 @@ Fill in the name and a short description. Everything else is optional:
 - **Style** picks the look: Standard, Playful, Minimal, Glossy, Technical, Editorial, Retro, Luxe, Organic or Neon. Each one also biases which surface finish the render rolls, so Editorial gets paper and card rather than injection-moulded plastic.
 - **Finish** is a local pass over the finished artwork: Flat leaves it alone, Apple edge lights the top lip and shades the base the way system icons catch light, Glossy dome adds a highlight over the top half, Deep shadow throws it further, Punchy enriches the colour. Switching between them re-renders in milliseconds and never calls the model, so it costs nothing to try all five.
 - **Body size** decides how much of the tile the icon fills. See [the note on macOS 26](#the-white-plate-on-macos-26) before changing it.
-- **Model** lists what `agy models` reports, minus the Claude entries. Refresh it with the button next to the picker. To change what gets filtered out, edit `excludedModelPrefixes` in `Sources/IconForge/AgyRunner.swift`.
+- **Generator** chooses which CLI draws. `agy` reports its own models and carries the reasoning effort inside the model name, so the effort picker greys out. `codex` offers `gpt-5.6-luna`, `gpt-5.6-terra` and `gpt-5.6-sol`, and takes the effort separately, from low to max. Model names do not carry between the two, so switching resets the picker to that CLI's default.
+- **Model** lists what `agy models` reports, minus the Claude entries. Refresh it with the button next to the picker. To change what gets filtered out, edit `excludedModelPrefixes` in `Sources/IconForge/AgyRunner.swift`. Under `codex` the list is fixed and the refresh button goes away.
 - **Icons per run** generates up to four at once, each with its own subject and its own art direction. They appear as a row under the preview and clicking one makes it the active icon for Export, Reveal and the agent prompt.
 
 Press Generate. One icon takes half a minute or so on `gemini-3.1-pro-high`, the default; four run in parallel and take about as long as the slowest. Cheaper models are faster but noticeably flatter, and in testing they ignored the palette hex values more often.
@@ -123,7 +124,7 @@ Two prompts do the work, both in [`Sources/IconForge/PromptBuilder.swift`](Sourc
 
 ## When something breaks
 
-**Could not find the agy command** usually means `agy` is somewhere the app cannot see. Apps launched from Finder get a bare `PATH`, so a binary in `~/.local/bin` is invisible to them even though it works in Terminal. IconForge checks the usual install directories and asks your login shell, but if it still comes up empty, paste the output of `which agy` into Settings.
+**Could not find the agy command** — or the codex one — usually means the binary is somewhere the app cannot see. Apps launched from Finder get a bare `PATH`, so a binary in `~/.local/bin` is invisible to them even though it works in Terminal. IconForge checks the usual install directories and asks your login shell, but if it still comes up empty, paste the output of `which agy` or `which codex` into the matching field in Settings. Each generator has its own path field, because pointing one at the other's binary makes the CLI reject arguments it has never heard of.
 
 **An unknown model** shows up as a non-zero exit from agy with its own message attached. Refresh the model list in Settings and pick again.
 

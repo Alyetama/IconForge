@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>IconForge</title>
-<meta name="description" content="Describe an app, get a finished macOS icon. IconForge writes the prompt, calls agy, and builds the icns.">
+<meta name="description" content="Describe an app, get a finished macOS icon. IconForge writes the prompt, calls agy or codex, and builds the icns.">
 <style>
   :root {
     --bg: #0a0c11;
@@ -250,7 +250,7 @@
   <div class="hero">
     <h1>Describe the app.<br>Get the <span class="lit">icon</span>.</h1>
     <p class="lede">
-      IconForge decides what object to draw, writes the image prompt, runs it through the agy CLI,
+      IconForge decides what object to draw, writes the image prompt, runs it through agy or codex,
       then cuts the result to the right shape for the Mac you are on and builds every size Apple
       asks for. What comes out is an icns you can drop into a bundle, not a square PNG you still
       have to deal with.
@@ -279,7 +279,7 @@
     <ol class="steps">
       <li><strong>You describe the app</strong><span>A name and one line about what it does. Colour, style and finish are optional.</span></li>
       <li><strong>It picks a subject</strong><span>Leave the subject blank and the model names the object worth drawing, mixing the literal choice with a lateral one. The answer lands back in the field, so you can edit it and try again.</span></li>
-      <li><strong>agy draws it</strong><span>The prompt describes a 3D render of one object on a gradient, never an app icon, because asking for the artifact is what makes models draw borders and badges.</span></li>
+      <li><strong>Your CLI draws it</strong><span>agy or codex, whichever you picked. The prompt describes a 3D render of one object on a gradient, never an app icon, because asking for the artifact is what makes models draw borders and badges.</span></li>
       <li><strong>The shape goes on</strong><span>Superellipse corners and a soft shadow, or a plain square when macOS is doing the rounding itself. The finish adds a lit top edge and a shaded base.</span></li>
       <li><strong>Everything gets written</strong><span>Ten iconset sizes, the icns from iconutil, a Windows ico, the finished 1024, and the untouched original.</span></li>
     </ol>
@@ -334,7 +334,7 @@
 
 <span class="c"># or run it straight out of the build folder</span>
 ./build_app.sh &amp;&amp; open build/IconForge.app</pre>
-    <p class="caption">Needs macOS 14 or later, the Xcode command line tools, and agy somewhere your shell can find it. If the app cannot see agy, paste the output of <code>which agy</code> into Settings.</p>
+    <p class="caption">Needs macOS 14 or later, the Xcode command line tools, and either agy or codex somewhere your shell can find it. If the app cannot see the one you picked, paste the output of <code>which agy</code> or <code>which codex</code> into its field in Settings.</p>
   </section>
 
   <section id="output">
