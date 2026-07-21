@@ -256,7 +256,7 @@ final class GeneratorModel: ObservableObject {
 
                 // 2. One art-direction recipe per variant, so a batch doesn't
                 // come back as four takes on the same picture.
-                let recipes = VariationRecipe.distinct(count: count)
+                let recipes = VariationRecipe.distinct(count: count, style: styleVariant)
 
                 phase = .generatingArtwork
                 statusDetail = count == 1
@@ -526,8 +526,7 @@ final class GeneratorModel: ObservableObject {
                                                   stamp: request.stamp,
                                                   suffix: suffix)
 
-        let imagePrompt = PromptBuilder.imagePrompt(appName: request.appName,
-                                                    description: request.description,
+        let imagePrompt = PromptBuilder.imagePrompt(description: request.description,
                                                     subject: subject,
                                                     palette: request.palette,
                                                     style: request.style,

@@ -31,31 +31,70 @@ enum StyleVariant: String, CaseIterable, Identifiable, Codable {
         }
     }
 
-    /// The style clause names the app's own purpose so the look and the
-    /// function argue for the same thing instead of pulling apart.
-    func modifier(purpose: String) -> String {
-        let job = purpose.isEmpty ? "this app" : "an app that \(purpose)"
+    /// A direct visual directive appended to the form paragraph. Naming the
+    /// app's purpose here turned out to add noise without steering the picture,
+    /// so these describe the look and nothing else.
+    var modifier: String {
         switch self {
         case .standard:
             return ""
         case .playful:
-            return " Aim it at \(job) as a friendly consumer app: rounder, chunkier proportions, a little squash and bounce in the form, warm saturated colour."
+            return " Make it charming and toy-like: extra-plump proportions with squash-and-stretch curves, candy-bright saturated colour, glossy highlights, an almost huggable character."
         case .minimal:
-            return " Aim it at \(job) as a quiet utility: the simplest readable silhouette, flat even shading, almost no surface detail, restrained colour."
+            return " Strip it to essentials: the simplest possible readable form, near-flat shading with one soft gradient, a single restrained colour plus one neutral, absolutely no ornament."
         case .glossy:
-            return " Aim it at \(job) as a premium consumer app: a polished, slightly reflective surface, one crisp specular highlight, deeper contrast."
+            return " Give it a premium sheen: polished reflective surfaces, one crisp window-shaped specular highlight, deep rich colour with strong dark-to-light contrast."
         case .technical:
-            return " Aim it at \(job) as a precise, engineered developer tool: crisp geometry, machined edges, subtle brushed-metal or fine-grid detail, cool restrained colour."
+            return " Make it precisely engineered: crisp machined geometry with chamfered edges, brushed-metal accents, a cool restrained palette, the feel of a precision instrument."
         case .editorial:
-            return " Aim it at \(job) as a writing or reading tool: paper and ink materials, soft matte stock, a printed feel, warm neutral colour with one accent."
+            return " Give it a print feel: matte paper and ink materials, layered card with clean cut edges, warm neutral tones with one strong accent colour."
         case .retro:
-            return " Aim it at \(job) as a piece of warm vintage hardware: slightly worn plastic or enamel, rounded 1970s industrial forms, muted period colour."
+            return " Style it as warm vintage hardware: rounded 1970s industrial forms, creamy enamel and beige plastic, muted period colour with one orange or teal accent."
         case .luxe:
-            return " Aim it at \(job) as an expensive professional tool: dense materials like anodised metal, glass and deep matte lacquer, restrained palette, one quiet metallic accent."
+            return " Make it feel expensive: dense materials — anodised metal, smoked glass, deep lacquer — a dark restrained palette, one quiet metallic accent, museum-grade lighting."
         case .organic:
-            return " Aim it at \(job) as something soft and natural: tactile matte surfaces, gentle asymmetry, hand-shaped forms, fresh natural colour."
+            return " Make it soft and natural: gently asymmetric hand-shaped forms, tactile matte surfaces, fresh botanical colour, the warmth of a crafted object."
         case .neon:
-            return " Aim it at \(job) as a bold creative or media app: the subject lit from within, glowing accents against a deep background, strong colour contrast, no scattering haze."
+            return " Light it from within: the object glows against a deep, near-black background, luminous edges and hot colour accents, strong contrast, clean dark surroundings with no haze."
+        }
+    }
+
+    /// Materials that suit this style. Without this, a roll could pair
+    /// Editorial with injection-moulded plastic and argue with itself.
+    var preferredMaterials: [String]? {
+        switch self {
+        case .standard:
+            return nil
+        case .playful:
+            return ["glossy injection-moulded plastic, toy-like and colour-saturated",
+                    "glossy ceramic with one crisp, window-shaped highlight"]
+        case .minimal:
+            return ["smooth matte ceramic with a satin sheen across the top surfaces",
+                    "dense soft-touch rubberised plastic, deep and light-absorbing"]
+        case .glossy:
+            return ["glossy ceramic with one crisp, window-shaped highlight",
+                    "deep polished lacquer with one long, soft reflection",
+                    "glossy injection-moulded plastic, toy-like and colour-saturated"]
+        case .technical:
+            return ["brushed anodised aluminium with a cool directional sheen",
+                    "dense soft-touch rubberised plastic, deep and light-absorbing"]
+        case .editorial:
+            return ["clean layered card stock with crisp cut edges",
+                    "smooth matte ceramic with a satin sheen across the top surfaces"]
+        case .retro:
+            return ["glossy injection-moulded plastic, toy-like and colour-saturated",
+                    "smooth matte ceramic with a satin sheen across the top surfaces"]
+        case .luxe:
+            return ["brushed anodised aluminium with a cool directional sheen",
+                    "deep polished lacquer with one long, soft reflection",
+                    "frosted glass with a soft inner glow, edges catching the light"]
+        case .organic:
+            return ["clean layered card stock with crisp cut edges",
+                    "smooth matte ceramic with a satin sheen across the top surfaces"]
+        case .neon:
+            return ["frosted glass with a soft inner glow, edges catching the light",
+                    "deep polished lacquer with one long, soft reflection",
+                    "glossy ceramic with one crisp, window-shaped highlight"]
         }
     }
 }
@@ -91,36 +130,46 @@ struct VariationRecipe {
     let composition: String
 
     static let angles = [
-        "Shown straight on, face to camera, symmetrical and square to the frame",
-        "Shown at a gentle three-quarter angle so two faces catch the light",
-        "Shown from slightly above, tilted a few degrees toward the viewer",
-        "Shown straight on with a slight lean, one side catching more light",
+        "Shown perfectly straight on, symmetrical and square to the frame.",
+        "Shown at a gentle three-quarter turn so two faces catch the light differently.",
+        "Shown from slightly above, tipped a few degrees toward the viewer.",
+        "Shown straight on but rotated a playful few degrees off vertical.",
+        "Shown from a slightly low three-quarter angle so the object feels quietly monumental.",
     ]
 
+    /// Each finish carries its own highlight behaviour, which is where the
+    /// visible difference between rolls actually comes from.
     static let materials = [
-        "clean matte-to-satin",
-        "soft matte ceramic",
-        "smooth satin with a faint sheen",
-        "dense soft-touch plastic",
+        "glossy ceramic with one crisp, window-shaped highlight",
+        "frosted glass with a soft inner glow, edges catching the light",
+        "smooth matte ceramic with a satin sheen across the top surfaces",
+        "dense soft-touch rubberised plastic, deep and light-absorbing",
+        "brushed anodised aluminium with a cool directional sheen",
+        "clean layered card stock with crisp cut edges",
+        "glossy injection-moulded plastic, toy-like and colour-saturated",
+        "deep polished lacquer with one long, soft reflection",
     ]
 
+    /// Deliberately similar: icons should always be centred and large, so the
+    /// variety budget goes to material and angle instead.
     static let compositions = [
-        "The subject sits dead centre and takes up about two thirds of the frame",
-        "The subject is centred and generously large, close to filling the safe area",
-        "The subject is centred a touch smaller, with airy margins around it",
-        "The subject is centred and bold, its silhouette unmistakable from across the room",
+        "The object sits dead centre at about two-thirds the height of the frame.",
+        "The object is centred and confident, nearly filling the central safe zone.",
+        "The object is centred a touch smaller, floating with airy margins all around.",
+        "The object is centred and feels close to the camera, large and softly rounded, its silhouette unmistakable.",
     ]
 
-    static func random() -> VariationRecipe {
-        VariationRecipe(angle: angles.randomElement() ?? angles[0],
-                        material: materials.randomElement() ?? materials[0],
-                        composition: compositions.randomElement() ?? compositions[0])
+    static func random(style: StyleVariant = .standard) -> VariationRecipe {
+        let pool = style.preferredMaterials ?? materials
+        return VariationRecipe(angle: angles.randomElement() ?? angles[0],
+                               material: pool.randomElement() ?? materials[0],
+                               composition: compositions.randomElement() ?? compositions[0])
     }
 
     /// Distinct recipes for a batch, so the variants don't collide with each other.
-    static func distinct(count: Int) -> [VariationRecipe] {
+    static func distinct(count: Int, style: StyleVariant = .standard) -> [VariationRecipe] {
         let shuffledAngles = angles.shuffled()
-        let shuffledMaterials = materials.shuffled()
+        let shuffledMaterials = (style.preferredMaterials ?? materials).shuffled()
         let shuffledCompositions = compositions.shuffled()
         return (0..<count).map { index in
             VariationRecipe(angle: shuffledAngles[index % shuffledAngles.count],
@@ -132,34 +181,39 @@ struct VariationRecipe {
 
 enum PromptBuilder {
 
-    /// The image prompt handed to agy. The "do not draw a rounded square" line
-    /// has to stay in sync with the squircle mask the pipeline applies
-    /// afterwards, or the icon ends up with two frames.
-    static func imagePrompt(appName: String,
-                            description: String,
+    /// The image prompt handed to agy.
+    ///
+    /// It describes the artwork, not the artifact: saying "app icon" pulled the
+    /// model toward icon *presentations* (rounded rectangles, badges, mockups),
+    /// which then had to be fought with a long list of prohibitions. The app
+    /// name is gone too, since it invited rendered text. The mask this pipeline
+    /// applies afterwards is why the object has to stay inside the central 70%.
+    static func imagePrompt(description: String,
                             subject: String,
                             palette: String,
                             style: StyleVariant,
                             variation: VariationRecipe) -> String {
         let trimmedPalette = palette.trimmingCharacters(in: .whitespacesAndNewlines)
         let paletteClause = trimmedPalette.isEmpty
-            ? "a cohesive two or three colour palette that suits the app's purpose"
+            ? "a cohesive palette of one dominant hue plus one supporting accent that suits an app that \(description)"
             : trimmedPalette
 
         return """
-        A macOS app icon for \(appName) — an app that \(description).
+        A polished 3D render of \(subject) — the soft, friendly, high-end 3D illustration style used for modern Mac app artwork. Exactly one object on a clean gradient backdrop, nothing else in frame.
 
-        Subject: \(subject). One single object, nothing else in the picture.
+        Form: confident and simplified — a few big, rounded primary masses in \(variation.material). Every edge and corner generously rounded. Keep only a handful of bold, functional details; no fine texture, engraving, patterning or clutter. The object should look like a beautifully manufactured physical product, not a photograph.\(style.modifier)
 
-        Style: the current Apple macOS icon look, the family Notes, Reminders, Podcasts and Maps belong to. A smooth, softly three-dimensional object with generously rounded edges and corners and a \(variation.material) surface. \(variation.angle). Lit from above by one broad soft studio light: gentle highlights along the upper edges, soft shading underneath, no harsh speculars and no rim lighting. Confident and simplified — bold primary forms, very little surface detail, nothing fiddly or ornamental.\(style.modifier(purpose: description))
+        \(variation.angle)
 
-        Composition: \(variation.composition). The silhouette has to stay obvious at 16 pixels, so keep the shape chunky and clearly separated from the background, with even breathing room on all four sides.
+        Light: one broad, soft studio key light from the upper front, a faint cool fill from below, and gentle ambient occlusion where surfaces meet, so the object feels genuinely dimensional. Give the top surfaces one controlled highlight appropriate to the material; keep all shading smooth and creamy, with no harsh cross-shadows.
 
-        Background: a smooth vertical gradient built from \(paletteClause), brighter at the top, filling the whole frame edge to edge. The subject reads clearly against it and floats just above it with one short, soft contact shadow.
+        Colour: built from \(paletteClause). Put the deepest tone at the bottom of the background and a lighter tone toward the top, and keep the object's own colours clearly separated from the backdrop so the silhouette pops — a light object on a deeper background, or a deep object on a lighter background. Add a soft, subtle radial glow behind the object to lift it off the backdrop, and one short, soft contact shadow directly beneath it.
 
-        Format: 1024x1024, crisp clean edges, no noise or grain, no banding. The artwork fills the entire square and bleeds off all four straight edges.
+        Composition: \(variation.composition) The whole object stays inside the central 70% of the canvas with even breathing room on all sides — the outer band and corners are pure background, because the image is cropped later. The silhouette must stay instantly readable at thumbnail size.
 
-        Do not draw: a rounded square, outline, border, frame or badge of any kind — the rounded icon mask is applied afterwards. No text, letters, numbers or logos. No second object, no hands, no people, no scenery, no desk, table or floor. No photographic realism, no stock-photo lighting, no busy fine detail, no drop shadow outside the subject.
+        Background: one smooth, immaculate gradient filling the entire 1024x1024 square and bleeding off all four edges — no noise, grain, banding, texture, vignetting or scenery.
+
+        The frame contains exactly one object on that gradient and nothing more: no text or lettering, no border, badge or container shape of any kind, no extra props, hands, people or surfaces.
         """
     }
 
@@ -202,41 +256,28 @@ enum PromptBuilder {
                                description: String,
                                count: Int,
                                avoiding used: [String]) -> String {
-        // Deliberately a preference, not a ban. A hard "never suggest these"
-        // pushes the model off the obvious fitting object and into tangents,
-        // which is worse than repeating an idea.
+        // Scoped per app by the caller, so this list only ever holds objects
+        // already used for this same app.
         let avoidClause = used.isEmpty
             ? ""
-            : """
-
-
-            These have already been used for this app, so prefer something else if an equally \
-            fitting object exists: \(used.joined(separator: "; ")). \
-            If the best object for the app is still one of those, a close variation of it is fine. \
-            Never pick a worse-fitting object just to be different.
-            """
-
-        let quantity = count == 1
-            ? "Name the single best object"
-            : "Name the \(count) best objects, one per line, no numbering or bullets"
+            : "\n\nDo not suggest any of these or close variants: \(used.joined(separator: "; "))"
 
         return """
-        An app called "\(appName)" does this: \(description)
+        You are choosing the subject for a macOS app icon.
 
-        \(quantity) to put on that app's icon.
+        The app: "\(appName)" — \(description).
 
-        The object has to be something the app literally works with, acts on, or produces. \
-        Someone who sees the icon without the name should be able to guess roughly what the app does. \
-        Relevance to "\(description)" matters more than originality.
+        Suggest \(count) different objects. Mix two kinds:
+        - literal: an object people directly associate with what the app does
+        - lateral: an object that captures the app's feeling or outcome through a simple metaphor (growth → a sprout; speed → a paper dart; scheduling → a mechanical timer)
 
-        Each object must also work as an icon: one physical thing, a simple chunky silhouette that \
-        still reads at 16 pixels, no scenes, no abstract shapes, no text, no screens showing content. \
-        One thing only, never two combined: "an envelope with a clock on it" is two things and is wrong, \
-        "an envelope" is right.
+        Rules for every object:
+        - one single physical object with a bold, chunky, instantly recognisable silhouette that survives at 16 pixels
+        - concrete nouns only — no scenes, groups of things, abstract shapes, screens, text or symbols
+        - avoid tired icon clichés — gear, lightbulb, rocket, generic star, magnifying glass, checkmark — unless the app is literally about that object
+        - word each as 2 to 6 lowercase words: the object plus at most one vivid form or character adjective (e.g. "a plump paper dart", "a stout brass bell", "a squat mechanical timer")\(avoidClause)
 
-        Reply with the objects only, lowercase, 2 to 5 words each, no punctuation, no preamble and \
-        no explanation. Do not write anything except the objects themselves. \
-        Example replies: "a paper airplane", "a brass compass", "a stack of coins".\(avoidClause)
+        Reply with the objects only, one per line, no numbering, no punctuation, no explanation.
         """
     }
 
