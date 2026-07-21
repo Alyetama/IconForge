@@ -24,12 +24,18 @@ struct ContentView: View {
         .sheet(isPresented: $showingSettings) { SettingsSheet() }
         .toolbar {
             ToolbarItem(placement: .principal) {
+                // Fixed point sizes: the hammer glyph's bounding box is taller
+                // than its optical size, and at .headline it clips against the
+                // toolbar item's rounded background.
                 HStack(spacing: 6) {
                     Image(systemName: "hammer.fill")
+                        .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(LinearGradient(colors: [.orange, .pink],
                                                         startPoint: .top, endPoint: .bottom))
-                    Text("IconForge").font(.headline)
+                    Text("IconForge")
+                        .font(.system(size: 13, weight: .semibold))
                 }
+                .padding(.vertical, 1)
             }
             ToolbarItem(placement: .primaryAction) {
                 Button {
