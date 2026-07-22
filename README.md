@@ -157,3 +157,7 @@ Sources/IconForge/
 ```
 
 `swift build` works on its own if you only want the binary. The app needs the bundle to behave like a normal window app, so use `build_app.sh`.
+
+## License
+
+[MIT](LICENSE).
