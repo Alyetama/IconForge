@@ -4,8 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 APP_NAME="IconForge"
-BUNDLE_ID="com.alyetama.iconforge"
-VERSION="1.0.0"
+# Bundle identifier and version live in Info.plist, which is copied verbatim.
 
 CONFIG="${1:-release}"
 BIN=".build/${CONFIG}/${APP_NAME}"

@@ -12,9 +12,9 @@ Generate up to four at once and keep the one you like. If one is nearly right, s
 
 - macOS 14 or later
 - Either `agy` or `codex`, runnable from your shell. Check with `which agy` or `which codex`. You choose between them in the app and you do not need both.
-- Xcode command line tools, for `swift` and `iconutil`. Run `xcode-select --install` if `iconutil` is missing.
+- The Xcode command line tools, but only to build from source. Run `xcode-select --install` if `swift` is missing. The downloaded app needs no tools at all.
 
-`sips` and `iconutil` ship with macOS, so there is nothing else to install.
+Everything else the app calls, `sips` and `iconutil` included, ships with macOS.
 
 ## Install
 
