@@ -215,7 +215,7 @@ enum PromptBuilder {
         return """
         A polished 3D render of \(subject)\(formClause). Rendered in the soft, friendly, high-end 3D illustration style used for modern Mac app artwork. Exactly one object on a clean gradient backdrop, nothing else in frame.
 
-        Form: confident and simplified — a few big, rounded masses in \(variation.material), every edge generously rounded, surface detail suggested rather than drawn. It should look like a beautifully manufactured physical product, not a photograph.\(style.modifier)
+        Form: confident and simplified — a few big, rounded masses in \(variation.material), every edge generously rounded, surface detail suggested rather than drawn. It should look like a beautifully manufactured physical product, not a photograph, and every surface is clean and unbranded.\(style.modifier)
 
         \(variation.angle)
 
@@ -231,7 +231,9 @@ enum PromptBuilder {
 
         The frame contains exactly one object on that gradient and nothing more: no text or lettering, no border, badge or container shape of any kind, no extra props, hands, people or surfaces.
 
-        Draw a real physical object, never a piece of software iconography. No company logo, brand mark or trademark anywhere in the frame, and nothing that imitates an existing operating system, browser or application icon. Multi-pane window glyphs, tiled four-square marks, stylised folder-and-document symbols and speech-bubble UI shapes are all off limits, however well they seem to suit the app. If \(subject) sounds like a software feature, draw the physical tool or object that stands for it instead.
+        Hard requirement, outranking every other instruction here: the object is completely unmarked. No logo, brand mark, trademark, emblem, decal, sticker, printed label, engraved symbol, button glyph or badge, on its surface or anywhere else in the frame. Real products and real hardware are covered in such marks and this one is not: every face is bare. Never draw a multi-pane window glyph, a tiled four-square mark, a stylised folder-and-document symbol or a speech-bubble outline, however well one seems to suit the app.
+
+        Draw a real physical object, never a piece of software iconography, and never anything imitating an existing operating system, browser or application icon. If \(subject) sounds like a software feature, draw the physical tool that stands for it instead.
         """
     }
 
