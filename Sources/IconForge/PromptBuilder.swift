@@ -43,7 +43,7 @@ enum StyleVariant: String, CaseIterable, Identifiable, Codable {
         case .minimal:
             return " Strip it to essentials: the simplest possible readable form, near-flat shading with one soft gradient, a single restrained colour plus one neutral, absolutely no ornament."
         case .glossy:
-            return " Give it a premium sheen: polished reflective surfaces, one crisp window-shaped specular highlight, deep rich colour with strong dark-to-light contrast."
+            return " Give it a premium sheen: polished reflective surfaces, one clean, softly-edged specular highlight, deep rich colour with strong dark-to-light contrast."
         case .technical:
             return " Make it precisely engineered: crisp machined geometry with chamfered edges, brushed-metal accents, a cool restrained palette, the feel of a precision instrument."
         case .editorial:
@@ -67,12 +67,12 @@ enum StyleVariant: String, CaseIterable, Identifiable, Codable {
             return nil
         case .playful:
             return ["glossy injection-moulded plastic, toy-like and colour-saturated",
-                    "glossy ceramic with one crisp, window-shaped highlight"]
+                    "glossy ceramic with one crisp, softly-edged highlight"]
         case .minimal:
             return ["smooth matte ceramic with a satin sheen across the top surfaces",
                     "dense soft-touch rubberised plastic, deep and light-absorbing"]
         case .glossy:
-            return ["glossy ceramic with one crisp, window-shaped highlight",
+            return ["glossy ceramic with one crisp, softly-edged highlight",
                     "deep polished lacquer with one long, soft reflection",
                     "glossy injection-moulded plastic, toy-like and colour-saturated"]
         case .technical:
@@ -94,7 +94,7 @@ enum StyleVariant: String, CaseIterable, Identifiable, Codable {
         case .neon:
             return ["frosted glass with a soft inner glow, edges catching the light",
                     "deep polished lacquer with one long, soft reflection",
-                    "glossy ceramic with one crisp, window-shaped highlight"]
+                    "glossy ceramic with one crisp, softly-edged highlight"]
         }
     }
 }
@@ -140,7 +140,7 @@ struct VariationRecipe {
     /// Each finish carries its own highlight behaviour, which is where the
     /// visible difference between rolls actually comes from.
     static let materials = [
-        "glossy ceramic with one crisp, window-shaped highlight",
+        "glossy ceramic with one crisp, softly-edged highlight",
         "frosted glass with a soft inner glow, edges catching the light",
         "smooth matte ceramic with a satin sheen across the top surfaces",
         "dense soft-touch rubberised plastic, deep and light-absorbing",
@@ -219,7 +219,7 @@ enum PromptBuilder {
 
         \(variation.angle)
 
-        Light: one broad, soft studio key light from the upper front, a faint cool fill from below, and gentle ambient occlusion where surfaces meet, so the object feels genuinely dimensional. Give the top surfaces one controlled highlight appropriate to the material; keep all shading smooth and creamy, with no harsh cross-shadows.
+        Light: one broad, soft studio key light from the upper front, a faint cool fill from below, and gentle ambient occlusion where surfaces meet, so the object feels genuinely dimensional. Give the top surfaces one controlled highlight appropriate to the material; keep all shading smooth and creamy, with no harsh cross-shadows. Highlights and reflections stay plain and shapeless: never a grid, lattice or multi-pane pattern.
 
         Colour: built from \(paletteClause). Put the deepest tone at the bottom of the background and a lighter tone toward the top, and keep the object's own colours clearly separated from the backdrop so the silhouette pops — a light object on a deeper background, or a deep object on a lighter background. Add a soft, subtle radial glow behind the object to lift it off the backdrop, and one short, soft contact shadow directly beneath it.
 
@@ -230,6 +230,8 @@ enum PromptBuilder {
         Background: one smooth, immaculate gradient filling the entire 1024x1024 square and bleeding off all four edges — no noise, grain, banding, texture, vignetting or scenery.
 
         The frame contains exactly one object on that gradient and nothing more: no text or lettering, no border, badge or container shape of any kind, no extra props, hands, people or surfaces.
+
+        Draw a real physical object, never a piece of software iconography. No company logo, brand mark or trademark anywhere in the frame, and nothing that imitates an existing operating system, browser or application icon. Multi-pane window glyphs, tiled four-square marks, stylised folder-and-document symbols and speech-bubble UI shapes are all off limits, however well they seem to suit the app. If \(subject) sounds like a software feature, draw the physical tool or object that stands for it instead.
         """
     }
 
@@ -271,6 +273,8 @@ enum PromptBuilder {
         \(keepLine) Change only this: \(request)\(styleNote)
 
         Everything else about the picture stays as it is. Keep it a single centred object on a smooth gradient background, filling the whole square and bleeding off all four straight edges. Do not add a rounded square, border, frame, text, letters or numbers.
+
+        Do not add a company logo, brand mark or trademark, and do not let the object drift toward an operating system or application icon: no multi-pane window glyphs, tiled four-square marks or folder-and-document symbols. If one is already there, replace it with a plain physical object.
 
         Save the edited image as a PNG at exactly 1024x1024 to this absolute path: \(outputPath)
         Do not save it anywhere else and do not ask any follow-up questions.
@@ -405,6 +409,8 @@ enum PromptBuilder {
         Describe the physical shape of \(subject) for someone modelling it in 3D.
 
         The masses it is built from, its proportions, and what makes its outline recognisable. Eight to eighteen words. No colours, no materials, no mood, no preamble.
+
+        If \(subject) is an idea or a software feature rather than something you could pick up, describe instead one solid physical object that stands for it. Never describe a screen, window, dialog, speech bubble or any other part of a user interface.
 
         Reply with the description only.
         """
