@@ -14,7 +14,7 @@ Generate up to four at once and keep the one you like. If one is nearly right, s
 - Either `agy` or `codex`, runnable from your shell. Check with `which agy` or `which codex`. You choose between them in the app and you do not need both.
 - The Xcode command line tools, but only to build from source. Run `xcode-select --install` if `swift` is missing. The downloaded app needs no tools at all.
 
-Everything else the app calls, `sips` and `iconutil` included, ships with macOS.
+The one command-line tool the app itself calls is `iconutil`, which ships with macOS.
 
 ## Install
 
@@ -44,7 +44,7 @@ Fill in the name and a short description. Everything else is optional.
 - **Style** offers Standard, Playful, Minimal, Glossy, Technical, Editorial, Retro, Luxe, Organic and Neon. Each one also narrows which surface materials the render can roll, so Editorial draws paper and card rather than injection-moulded plastic.
 - **Finish** is a local pass over the finished artwork. Flat leaves it alone. Apple edge lights the top lip and shades the base the way system icons catch light. Glossy dome adds a highlight across the top half, Deep shadow throws the shadow further, and Punchy enriches the colour. Switching between them re-renders in milliseconds and never calls the model, so trying all five costs nothing.
 - **Body size** is how much of the tile the icon fills. Read [the note on macOS 26](#the-white-plate-on-macos-26) before you change it.
-- **Generator** is the CLI that draws. `agy` reports its own models and bakes the reasoning effort into the model name, which is why the effort control greys out next to it. `codex` offers `gpt-5.6-luna`, `gpt-5.6-terra` and `gpt-5.6-sol`, and takes the effort separately, from low to max. Model names do not carry across, so switching generator resets the picker to that CLI's default.
+- **Generator** is the CLI that draws. `agy` reports its own models, and most of its ids already carry an effort level (`…-low`, `…-high`), so IconForge does not pass effort separately and the effort control greys out next to it. `agy` does accept an `--effort` flag of its own; IconForge simply does not use it. `codex` offers `gpt-5.6-luna`, `gpt-5.6-terra` and `gpt-5.6-sol`, and takes the effort separately, from low to max. Model names do not carry across, so switching generator resets the picker to that CLI's default.
 - **Model** lists whatever `agy models` reports, minus the Claude entries. The button beside the picker re-reads it. To change what gets filtered, edit `excludedModelPrefixes` in `Sources/IconForge/AgyRunner.swift`. Under `codex` the list is fixed and the refresh button disappears.
 - **Icons per run** draws up to four at once, each with its own subject and its own art direction. They appear as a row under the preview, and clicking one makes it the active icon for Export, Reveal and the agent prompt.
 
@@ -54,7 +54,7 @@ A batch keeps whatever comes back. If one of the four calls fails, you still get
 
 Reroll re-derives the subject rather than redrawing the same object. It steers away from the half dozen subjects it last used for that app, so a second press gives you a different idea. Type your own subject and it sticks, and only the art direction varies. The strip along the bottom holds every past run, and clicking one loads its icon and its inputs back into the window.
 
-Settings covers the output folder, how many tries each icon gets before IconForge gives up on it, how long a single call may run, and a path field for each generator.
+Settings has five sections: Generator (the same backend, model and effort pickers as the inspector), Generation (icons per run, tries per icon before IconForge gives up on one, and how long a single call may run), Icon shape (finish and body size), Files (the output folder), and Binary paths (one field per generator).
 
 ### Editing an icon you almost like
 
@@ -124,7 +124,7 @@ Raise `squircleExponent` for squarer corners, or lower it toward 2 for a plain r
 
 ### The prompts
 
-Two prompts do the work, both in [`Sources/IconForge/PromptBuilder.swift`](Sources/IconForge/PromptBuilder.swift). The first is a text-only call asking for objects worth drawing, mixing a literal choice with a lateral one and refusing the usual gear and lightbulb clichés. It also asks for a short note on each object's physical shape, which goes into the image prompt so the model draws the thing you meant rather than inventing a form for the noun. The second is the image prompt, assembled from your inputs plus a randomly rolled material, camera angle and composition, so two presses of Generate never hand back the same picture. Both are plain string builders. Edit them, rebuild, and the next icon uses the new wording.
+Two prompts do the work, both in [`Sources/IconForge/PromptBuilder.swift`](Sources/IconForge/PromptBuilder.swift). The first is a text-only call asking for objects worth drawing, mixing a literal choice with a lateral one and refusing the usual gear and lightbulb clichés. It also asks for a short note on each object's physical shape, which goes into the image prompt so the model draws the thing you meant rather than inventing a form for the noun. The second is the image prompt, assembled from your inputs plus a randomly rolled material, camera angle and composition. There are 5 angles, 8 materials and 4 compositions, so 160 combinations; a batch draws distinct ones, and two separate presses can in principle collide, but rarely do. Both are plain string builders. Edit them, rebuild, and the next icon uses the new wording.
 
 ## When something breaks
 
@@ -145,7 +145,10 @@ Package.swift
 Info.plist                 # copied into the bundle by build_app.sh
 build_app.sh               # compile and assemble IconForge.app
 install.sh                 # build_app.sh, then copy to /Applications
+make_dmg.sh                # build_app.sh, then pack docs/IconForge.dmg
 Resources/AppIcon.icns     # the app's own icon, made with IconForge
+Tools/generate_palettes.py # regenerates PaletteData.swift from a JSON export
+docs/                      # the GitHub Pages site, the dmg it serves, and images
 Sources/IconForge/
   IconForgeApp.swift       # @main scene
   ContentView.swift        # window, preview, gallery, settings
@@ -154,6 +157,8 @@ Sources/IconForge/
   PromptBuilder.swift      # the prompt template and style variants
   IconPipeline.swift       # squircle, shadow, iconset, icns
   ICOWriter.swift          # Windows .ico container
+  Palettes.swift           # palette model, swatch view, hex parsing
+  PaletteData.swift        # the 192 palettes, generated
 ```
 
 `swift build` works on its own if you only want the binary. The app needs the bundle to behave like a normal window app, so use `build_app.sh`.
