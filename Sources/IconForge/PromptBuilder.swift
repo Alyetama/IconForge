@@ -290,12 +290,18 @@ enum PromptBuilder {
             ? ""
             : "\n\nDo not suggest any of these or close variants: \(used.joined(separator: "; "))"
 
+        // "Suggest 1 different objects" reads as a mistake and invites the
+        // model to hand back a list anyway.
+        let ask = count == 1
+            ? "Suggest one object."
+            : "Suggest \(count) different objects, no two alike."
+
         return """
         You are choosing the subject for a macOS app icon.
 
         The app: "\(appName)" — \(description).
 
-        Suggest \(count) different objects. Mix two kinds:
+        \(ask) Mix two kinds:
         - literal: an object people directly associate with what the app does
         - lateral: an object that captures the app's feeling or outcome through a simple metaphor (growth → a sprout; speed → a paper dart; scheduling → a mechanical timer)
 
@@ -370,6 +376,27 @@ enum PromptBuilder {
             if results.count == count { break }
         }
         return results
+    }
+
+    /// Pads a short list of subjects out to `count`.
+    ///
+    /// Cycling through what did come back matters: repeating the first one
+    /// drew the same object three times in a four-icon batch, which defeats
+    /// the point of asking for four.
+    static func fill(_ subjects: [SubjectIdea], to count: Int, description: String) -> [SubjectIdea] {
+        guard subjects.count < count else { return Array(subjects.prefix(count)) }
+        guard !subjects.isEmpty else {
+            return Array(repeating: SubjectIdea(subject: fallbackSubject(description: description), form: nil),
+                         count: count)
+        }
+
+        var out = subjects
+        var index = 0
+        while out.count < count {
+            out.append(subjects[index % subjects.count])
+            index += 1
+        }
+        return out
     }
 
     /// Asks only for the shape of a subject the user typed.

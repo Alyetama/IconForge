@@ -901,12 +901,39 @@ final class GeneratorModel: ObservableObject {
         }.value
 
         var subjects = raw.map { PromptBuilder.cleanSubjects($0, count: count) } ?? []
-        let fallback = PromptBuilder.SubjectIdea(subject: PromptBuilder.fallbackSubject(description: description),
-                                                 form: nil)
-        while subjects.count < count {
-            subjects.append(subjects.first ?? fallback)
+
+        // Asking for four often comes back with two or three usable lines: the
+        // model chats, repeats itself, or trails off. Ask once more for the
+        // shortfall, naming what we already have so it cannot hand back the
+        // same objects. A batch exists to show different ideas, so filling the
+        // gap with copies would waste the slots.
+        if subjects.count < count, !handle.isCancelled {
+            let missing = count - subjects.count
+            let topUp = PromptBuilder.subjectsPrompt(appName: appName,
+                                                     description: description,
+                                                     count: missing,
+                                                     avoiding: used + subjects.map(\.subject))
+            let more = try? await Task.detached(priority: .userInitiated) {
+                try AgyRunner.run(binary: binary,
+                                  backend: backend,
+                                  effort: effort,
+                                  model: model,
+                                  prompt: topUp,
+                                  workingDirectory: workingDirectory,
+                                  timeout: 150,
+                                  handle: handle)
+            }.value
+
+            if let more {
+                var seen = Set(subjects.map { $0.subject.lowercased() })
+                for idea in PromptBuilder.cleanSubjects(more, count: missing)
+                where seen.insert(idea.subject.lowercased()).inserted {
+                    subjects.append(idea)
+                }
+            }
         }
-        return subjects
+
+        return PromptBuilder.fill(subjects, to: count, description: description)
     }
 
     /// The shape of a subject the user typed. Best effort: without it the
