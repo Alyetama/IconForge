@@ -154,13 +154,22 @@ private struct InspectorPane: View {
                 }
 
                 FieldGroup(title: "Body size", symbol: "arrow.up.left.and.arrow.down.right",
-                           hint: model.bodySize.blurb) {
+                           hint: IconBodySize.systemDrawsItsOwnPlate
+                               ? "this Mac rounds icons itself"
+                               : model.bodySize.blurb) {
                     Picker("", selection: $model.bodySize) {
-                        ForEach(IconBodySize.allCases) { option in
+                        // Only the sizes that render correctly here. On macOS 26
+                        // a masked body sits inside the system plate and the
+                        // plate reads as a white border.
+                        ForEach(IconBodySize.selectable) { option in
                             Text(option.rawValue).tag(option)
                         }
                     }
                     .labelsHidden()
+                    .disabled(IconBodySize.selectable.count < 2)
+                    .help(IconBodySize.systemDrawsItsOwnPlate
+                          ? "macOS 26 draws its own rounded plate. A masked body would sit inside it and show as a white border, so full bleed is the only correct setting here."
+                          : "How much of the tile the icon body fills.")
                 }
 
                 FieldGroup(title: "Icons per run", symbol: "square.grid.2x2",
@@ -1022,12 +1031,15 @@ private struct SettingsSheet: View {
                         }
                         LabeledContent("Body size") {
                             Picker("", selection: $model.bodySize) {
-                                ForEach(IconBodySize.allCases) { Text($0.rawValue).tag($0) }
+                                ForEach(IconBodySize.selectable) { Text($0.rawValue).tag($0) }
                             }
                             .labelsHidden()
                             .fixedSize()
+                            .disabled(IconBodySize.selectable.count < 2)
                         }
-                        caption("Both re-render the current icon locally, without calling the generator.")
+                        caption(IconBodySize.systemDrawsItsOwnPlate
+                                ? "Both re-render the current icon locally, without calling the generator. This Mac draws its own rounded plate behind every icon, so body size is fixed at full bleed: a masked body would sit inside that plate and show as a white border."
+                                : "Both re-render the current icon locally, without calling the generator.")
                     }
 
                     section("Files", "folder") {

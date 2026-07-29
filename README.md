@@ -43,7 +43,7 @@ Fill in the name and a short description. Everything else is optional.
 - **Palette** opens a grid of 192 trending [Coolors](https://coolors.co/palettes/trending) palettes. Pick one and its hex values go into the prompt verbatim. Ignore the grid and you can type a direction instead, like "sea glass to deep teal", in the field underneath. Swapping the library for a different export takes one command: `python3 Tools/generate_palettes.py your-palettes.json`, then rebuild.
 - **Style** offers Standard, Playful, Minimal, Glossy, Technical, Editorial, Retro, Luxe, Organic and Neon. Each one also narrows which surface materials the render can roll, so Editorial draws paper and card rather than injection-moulded plastic.
 - **Finish** is a local pass over the finished artwork. Flat leaves it alone. Apple edge lights the top lip and shades the base the way system icons catch light. Glossy dome adds a highlight across the top half, Deep shadow throws the shadow further, and Punchy enriches the colour. Switching between them re-renders in milliseconds and never calls the model, so trying all five costs nothing.
-- **Body size** is how much of the tile the icon fills. Read [the note on macOS 26](#the-white-plate-on-macos-26) before you change it.
+- **Body size** is how much of the tile the icon fills. On macOS 26 and later the picker offers only Full bleed, because nothing else renders correctly there. See [the note on macOS 26](#the-white-plate-on-macos-26).
 - **Generator** is the CLI that draws. `agy` reports its own models, and every one it offers carries an effort level in the id (`…-low`, `…-medium`, `…-high`). It has an `--effort` flag too, but the two cannot be combined: passing both fails with `--model gemini-3.6-flash-low conflicts with --effort=high`. So effort comes from the model you pick, and the separate effort control greys out. `codex` offers `gpt-5.6-luna`, `gpt-5.6-terra` and `gpt-5.6-sol`, and does take effort separately, from low to max. Model names do not carry across, so switching generator resets the picker to that CLI's default.
 - **Model** lists whatever `agy models` reports, minus the Claude entries. The button beside the picker re-reads it. To change what gets filtered, edit `excludedModelPrefixes` in `Sources/IconForge/AgyRunner.swift`. Under `codex` the list is fixed and the refresh button disappears.
 - **Icons per run** draws up to four at once, each with its own subject and its own art direction. They appear as a row under the preview, and clicking one makes it the active icon for Export, Reveal and the agent prompt.
@@ -105,6 +105,10 @@ Tahoe wraps any legacy `.icns` in a system-drawn rounded plate and centres the a
 | **Full bleed** | Plain 1024 square, no mask | macOS 26, where the system does the rounding. The default. |
 
 Full bleed skips the squircle, the margin and the shadow on purpose. The white border is two masks stacking, so on macOS 26 IconForge drops its own and lets the system supply the only one.
+
+**On macOS 26 and later the choice is made for you.** The picker offers Full bleed and nothing else, and a masked setting stored by an older version is corrected at launch. The two masked sizes stay available when IconForge runs on macOS 14 or 15, where nothing else is doing the rounding.
+
+The same trap catches an icon with a transparent background. If you strip the backdrop and leave only the subject, there is nothing to fill the tile, so the system plate shows through and you are back to a white square behind your artwork. Filling the tile edge to edge is what makes the plate disappear.
 
 ### Tuning the shape
 

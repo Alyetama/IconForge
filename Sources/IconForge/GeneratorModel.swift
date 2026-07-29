@@ -208,8 +208,17 @@ final class GeneratorModel: ObservableObject {
     }
 
     /// How much of the canvas the icon body fills. Same deal: a local re-render.
-    @Published var bodySize: IconBodySize = IconBodySize(rawValue: UserDefaults.standard.string(forKey: "bodySize") ?? "") ?? .fullBleed {
+    ///
+    /// The stored value is corrected on the way in: a masked body chosen on an
+    /// older macOS, or carried over from another install, would otherwise sit
+    /// inside the plate macOS 26 draws and read as a white border.
+    @Published var bodySize: IconBodySize = (IconBodySize(rawValue: UserDefaults.standard.string(forKey: "bodySize") ?? "") ?? .fullBleed).correctedForThisMac {
         didSet {
+            let corrected = bodySize.correctedForThisMac
+            if corrected != bodySize {
+                bodySize = corrected
+                return
+            }
             guard bodySize != oldValue else { return }
             UserDefaults.standard.set(bodySize.rawValue, forKey: "bodySize")
             reapplyFinish()
@@ -259,6 +268,18 @@ final class GeneratorModel: ObservableObject {
         if !model.isEmpty && !excluded && !choices.contains(model) { choices.insert(model, at: 0) }
         if choices.isEmpty { choices = [backend.defaultModel] }
         return choices
+    }
+
+    /// Writes the corrected body size back to defaults. The property
+    /// initialiser fixes the in-memory value but cannot fire `didSet`, so
+    /// without this a masked setting from an older macOS lingers on disk and
+    /// would come back if the restriction were ever relaxed.
+    func normaliseBodySize() {
+        let corrected = bodySize.correctedForThisMac
+        if bodySize != corrected { bodySize = corrected }
+        if UserDefaults.standard.string(forKey: "bodySize") != corrected.rawValue {
+            UserDefaults.standard.set(corrected.rawValue, forKey: "bodySize")
+        }
     }
 
     // MARK: - Model discovery

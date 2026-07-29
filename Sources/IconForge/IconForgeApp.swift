@@ -10,6 +10,7 @@ struct IconForgeApp: App {
                 .environmentObject(model)
                 .frame(minWidth: 980, minHeight: 660)
                 .task {
+                    model.normaliseBodySize()
                     model.reloadHistory()
                     model.loadModels()
                 }

@@ -57,6 +57,26 @@ enum IconBodySize: String, CaseIterable, Identifiable, Codable {
         case .fullBleed: return "Plain square, no mask — macOS 26 applies its own"
         }
     }
+
+    /// macOS 26 draws its own rounded plate behind any legacy `.icns`. An icon
+    /// that brings its own mask and margin lands inside that plate, and the
+    /// plate shows as a white border around it. So on 26 and later, full bleed
+    /// is not a preference, it is the only setting that renders correctly.
+    static let systemDrawsItsOwnPlate = ProcessInfo.processInfo.isOperatingSystemAtLeast(
+        OperatingSystemVersion(majorVersion: 26, minorVersion: 0, patchVersion: 0))
+
+    /// The sizes worth offering on this Mac. Masked bodies stay available on
+    /// macOS 14 and 15, where nothing else is doing the rounding.
+    static var selectable: [IconBodySize] {
+        systemDrawsItsOwnPlate ? [.fullBleed] : allCases
+    }
+
+    /// Swaps a masked body for full bleed when the system would plate it.
+    /// A stored setting outlives the OS it was chosen on, so this runs at
+    /// launch as well as on change.
+    var correctedForThisMac: IconBodySize {
+        Self.selectable.contains(self) ? self : .fullBleed
+    }
 }
 
 /// Apple's required .iconset members: (file name, rendered pixel size).
