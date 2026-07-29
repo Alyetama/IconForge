@@ -1159,17 +1159,37 @@ final class GeneratorModel: ObservableObject {
         let name = appName.trimmingCharacters(in: .whitespacesAndNewlines)
         let appLabel = name.isEmpty ? "the app" : name
 
+        // Read the shape off the artwork, not off the picker. A run restored
+        // from the gallery carries whatever body size it was made with, so the
+        // current setting would describe the wrong icon.
+        let shapeNote = previewIsFullBleed
+            ? """
+              This icon is full bleed: the artwork fills the whole square on purpose, corner to corner, and macOS rounds it at display time.
+              """
+            : """
+              This icon is masked to a rounded square with a transparent margin, for macOS 14 and 15. Keep that margin; it is where the shadow lives.
+              """
+
         let prompt = """
         Set the icon below as the app icon for the app we are working on in this session (\(appLabel)), then rebuild and reinstall it so the new icon shows up.
 
-        The icon is already generated. Use these files as they are, do not generate or redraw anything:
+        The icon is already generated and finished. Use these files byte for byte. Do not redraw, recolour, crop, pad, rescale, round the corners, or remove the background:
 
           .icns (macOS):         \(artifacts.icns.path)
           .iconset folder:       \(artifacts.iconsetDir.path)
           .ico (Windows):        \(artifacts.ico.path)
           1024 PNG:              \(artifacts.maskedPNG.path)
-          raw 1024 PNG:          \(artifacts.rawPNG.path)
+          raw artwork, pre-mask:  \(artifacts.rawPNG.path)   (reference only, do not install this one)
           everything:            \(artifacts.sessionDir.path)
+
+        \(shapeNote)
+
+        Two "improvements" will wreck it, and both are tempting:
+
+        - Making the background transparent so only the subject remains. With nothing filling the tile, macOS draws its own light plate behind the artwork and you get a white square around your icon. The backdrop is load-bearing.
+        - Adding your own rounded corners, margin, padding or drop shadow. macOS already applies one mask; a second one sits inside it and the gap between the two reads as a white border.
+
+        Neither is needed and neither is an improvement. Install the files as they are.
 
         Work out how this project declares its icon before changing anything, because it varies by stack. Look for an existing icon file or icon config and replace it in place rather than inventing a new convention. Common cases:
 
@@ -1182,6 +1202,8 @@ final class GeneratorModel: ObservableObject {
         - Anything else: find where the current icon lives, match its format and naming, and swap it.
 
         Then rebuild the app. If it is signed ad-hoc or unsigned, re-sign after modifying the bundle (codesign --force --sign - path/to/App.app). Reinstall it, replacing any copy already installed. If the Dock or Finder still shows the old icon, touch the bundle and restart the Dock to drop the cached version.
+
+        Before you tell me it is done, look at the installed icon in Finder or the Dock. \(previewIsFullBleed ? "The artwork should reach the edges of its rounded tile, with no white or grey border around it. A light square sitting behind the icon means the background was stripped or a second mask was applied somewhere: go back and install the files unmodified." : "It should sit inside its tile with an even transparent margin and a soft shadow, and no second border around that.")
 
         Tell me which files you changed and confirm the installed app is using the new icon.
         """
