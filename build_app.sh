@@ -26,7 +26,11 @@ if [[ -f Resources/AppIcon.icns ]]; then
 fi
 
 echo "▶ Signing (ad-hoc)…"
-codesign --force --sign - "${APP_DIR}"
+# Apple's codesign by absolute path. conda, miniforge and some cross-compile
+# toolchains put their own `codesign` shim earlier on PATH, and that one cannot
+# sign an .app bundle: it aborts with NotAMachOFileException and leaves the
+# bundle unsigned, which macOS then refuses to launch.
+/usr/bin/codesign --force --sign - "${APP_DIR}"
 
 echo "✅ Built ${APP_DIR}"
 echo "   Run:     open \"${APP_DIR}\""
